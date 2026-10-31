@@ -46,6 +46,9 @@ p code, li code, .rich code { background: var(--code-bg); padding: 0 3px; border
 .home-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
 .home h1 { font-family: var(--serif); font-size: 34px; margin: 0; color: var(--accent); }
 .home .tagline { color: var(--muted); margin: 4px 0 0; }
+.feedback-row { display: flex; justify-content: flex-end; }
+.feedback-row + .notice { margin-top: 10px; }
+.btn-feedback { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 .notice { font-size: 13px; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 18px 0; }
 .resume { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--warn-soft); border: 1px solid #f0d27a; border-radius: 10px; padding: 14px 16px; margin: 18px 0; }
 .resume strong { display: block; }

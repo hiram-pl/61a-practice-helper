@@ -1048,6 +1048,7 @@
         </div>
       </section>`}
 
+      <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a></div>
       <div class="notice">No account needed. Your answers, code notes and annotations are saved in <b>this browser on this device</b> and are gone if you clear site data.</div>
       <p class="disclaimer">Privacy: this site uses Cloudflare Web Analytics, which collects aggregate traffic statistics (such as visits and page views) without cookies. Your answers, code, grades and exam history stay in your browser’s localStorage and are never sent anywhere.</p>
       <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024 and Spring 2024) and credited on each question. Explanations were written for this prototype and are not official.</p>
@@ -1193,7 +1194,9 @@
     redo: '<path d="M15 7l4 4-4 4" /><path d="M19 11h-9a5 5 0 000 10h3" />',
     clear: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />',
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
+    msg: '<path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />',
   };
+  const FEEDBACK_URL = 'https://forms.gle/VqhUJDZj1UNJq3gRA'; // Google Form, opened in a new tab; nothing is collected here
   const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
 
   function renderLeft(g) {
