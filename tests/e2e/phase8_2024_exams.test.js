@@ -101,8 +101,8 @@ ok(['fa24-1', 'fa24-2', 'sp24-1', 'sp24-2'].every((pid) => !SUITES.some((t) => t
     ok(new RegExp(label).test(await text('.set-name')), `${e}: header shows “${label}”`);
     if (e === 'fa24') {
       await click('#nav-toggle'); await click('#nav-fa24-2');
-      await page.waitForFunction(() => { const i = document.querySelector('.exam-figure img'); return i && i.complete && i.naturalWidth > 0; }, { timeout: 8000 });
-      ok(/environment diagram/.test(await page.$eval('.exam-figure img', (i) => i.alt)), 'fa24 Q2: the exam’s diagram image loads, with alt text');
+      await page.waitForFunction(() => { const i = document.querySelector('.dg-canvas img'); return i && i.complete && i.naturalWidth > 0; }, { timeout: 8000 });
+      ok(/environment diagram/.test(await page.$eval('.dg-canvas img', (i) => i.alt)), 'fa24 Q2: the exam’s diagram image loads, with alt text');
     }
     ok(!(await has('#run-btn')), `${e}: no Run Code during the live exam`);
     // answer every part with the official answer, then submit

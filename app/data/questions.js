@@ -73,6 +73,7 @@ def even(s):
     'fa25-2': {
       exam: 'fa25', number: '2', title: 'That’s a Wrap', points: 4,
       intro: 'Answer the question below about this code. Draw an environment diagram, but the diagram itself will not be scored.',
+      figure: { src: 'assets/fa25-mt2-q2.png', width: 628, height: 418, alt: 'From the exam: the code, and a blank environment diagram. The Global frame binds wrap to func wrap(s) [parent=Global] and peel to func peel(f, s) [parent=Global]. Frames f1 and f2 have blank names, [parent=Global], three blank bindings and a blank Return value. Frames f3 and f4 have blank names, [parent=Global], one blank binding and a blank Return value.', slots: [[217, 71, 57], [246, 91, 86], [343, 91, 43], [246, 114, 86], [343, 114, 43], [246, 135, 86], [343, 135, 43], [343, 161, 43], [217, 184, 57], [246, 204, 86], [343, 204, 43], [246, 227, 86], [343, 227, 43], [246, 248, 86], [343, 248, 43], [343, 274, 43], [217, 297, 57], [246, 317, 85], [343, 317, 43], [343, 341, 43], [217, 366, 57], [246, 386, 86], [343, 386, 43], [343, 409, 43]] },
       code: code(`
 def wrap(s):
     return [s[0], s]
@@ -332,6 +333,7 @@ m = map(add_t, s)
     'sp25-2': {
       exam: 'sp25', number: '2', title: 'This or That', points: 7,
       intro: 'Answer the questions about the code below. Draw an environment diagram, but the diagram itself will not be scored.',
+      figure: { src: 'assets/sp25-mt2-q2.png', width: 646, height: 259, alt: 'From the exam: the code with line numbers 1 to 14, and a blank environment diagram. The Global frame binds f to func f(this) [parent=Global] and has one more blank binding. Frame f1: f [parent=Global] has three blank bindings and a blank Return value. Frame f2: g [parent=f1] has two blank bindings and a blank Return value.', slots: [[283, 45, 86], [380, 45, 44], [284, 91, 85], [380, 91, 44], [284, 114, 85], [380, 114, 44], [284, 135, 85], [380, 135, 43], [380, 161, 44], [284, 204, 85], [380, 204, 44], [284, 227, 85], [380, 227, 44], [381, 251, 43]] },
       code: code(`
 def f(this):
     that = this[1]
@@ -598,7 +600,7 @@ jump = {(2 * x - 1): x for x in range(50)}
     'fa24-2': {
       exam: 'fa24', number: '2', title: 'Pizza by the Slice', points: 5,
       intro: 'Answer the questions about the code below. You are encouraged to draw an environment diagram, but the diagram itself will not be scored.',
-      figure: { src: 'assets/fa24-mt2-q2.png', width: 683, height: 216, alt: 'From the exam: the code with line numbers 1 to 12, and a blank environment diagram. The Global frame binds slice_up to func slice_up(s) [parent=Global] and has one more blank binding. Frame f1: slice_up [parent=Global] has three blank bindings and a blank Return value.' },
+      figure: { src: 'assets/fa24-mt2-q2.png', width: 683, height: 216, alt: 'From the exam: the code with line numbers 1 to 12, and a blank environment diagram. The Global frame binds slice_up to func slice_up(s) [parent=Global] and has one more blank binding. Frame f1: slice_up [parent=Global] has three blank bindings and a blank Return value.', slots: [[294, 44, 86], [391, 44, 44], [295, 97, 85], [391, 97, 44], [295, 120, 85], [391, 120, 44], [295, 141, 85], [391, 141, 44], [391, 167, 44]] },
       code: code(`
 def slice_up(s):
     copy = s
@@ -823,7 +825,7 @@ summer = Link(1, Link(2, Link(3, Link(4))))
     'sp24-2': {
       exam: 'sp24', number: '2', title: 'Spin Cycle', points: 6,
       intro: 'Complete the environment diagram below and then answer the questions that follow. Do not add frames for calls to built-in functions (such as `print`).',
-      figure: { src: 'assets/sp24-mt2-q2.png', width: 663, height: 251, alt: 'From the exam: the code with line numbers 1 to 13, and an environment diagram to complete. The Global frame binds cycle to func cycle(a) [parent=Global] and has a blank binding for c. Frame f1: cycle [parent=Global] has blank bindings for a and b, binds f to func f(rest) [parent=f1], and shows Return value None. Frame f2: f [parent=f1] has a blank binding for rest and a blank Return value.' },
+      figure: { src: 'assets/sp24-mt2-q2.png', width: 663, height: 251, alt: 'From the exam: the code with line numbers 1 to 13, and an environment diagram to complete. The Global frame binds cycle to func cycle(a) [parent=Global] and has a blank binding for c. Frame f1: cycle [parent=Global] has blank bindings for a and b, binds f to func f(rest) [parent=f1], and shows Return value None. Frame f2: f [parent=f1] has a blank binding for rest and a blank Return value.', slots: [[391, 45, 44], [391, 98, 44], [391, 142, 44], [391, 219, 44], [391, 242, 43]] },
       code: code(`
 def cycle(a):
     def f(rest):

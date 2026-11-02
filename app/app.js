@@ -180,7 +180,7 @@
       store.reviews[id] = {
         reviewOf: id, mode: 'exam', title: a.title, kind: a.kind, examId: a.examId,
         ids: a.ids.slice(), groups: copy(a.groups), index: 0,
-        answers: copy(a.answers), eliminated: copy(a.eliminated), notes: copy(a.notes), annotations: copy(a.annotations),
+        answers: copy(a.answers), eliminated: copy(a.eliminated), notes: copy(a.notes), annotations: copy(a.annotations), diagrams: copy(a.diagrams),
         marked: {}, checked: {}, revealed: {}, selfGrade: {}, timer: null, startedAt: Date.now(),
       };
     }
@@ -189,6 +189,7 @@
   // Every session (practice set, exam, review workspace) keeps its own scratch code and annotations.
   const notesOf = () => cur().notes || (cur().notes = {});
   const annotationsOf = () => cur().annotations || (cur().annotations = {});
+  const diagramsOf = () => cur().diagrams || (cur().diagrams = {});
 
   function announce(msg) {
     live.textContent = '';
@@ -734,6 +735,510 @@
     }
   }
 
+  // ───────────────────────────── Diagram workspace (right pane) ─────────────────────────────
+  // Scratch work over the exam's own environment diagram image, for problems with a `figure`. Never graded.
+  // Stored per problem in diagramsOf()[pid], i.e. on the session being shown, in image pixels (shown at 1:1):
+  //   { id, kind: 'pen',   pts: [[x, y], …] }                 freehand stroke
+  //   { id, kind: 'text',  x, y, text, slot? }                text, top-left corner at x, y; `slot` when it fills a blank
+  //   { id, kind: 'list',  x, y, cells: ['', …] }             list object, top-left corner at x, y
+  //   { id, kind: 'arrow', from, to, fromRef?, toRef? }       arrow; an end with a ref is attached and follows its target
+  // A ref is { slot: i } (a value blank), { text: id } (a text box) or { list: id, cell: i } (a list cell).
+  // Every blank in figure.slots ([x, line y, width]) is a typing spot from the start; it only gets a stored item once
+  // something is typed in it. Clicking anywhere else starts a free text box, which can also be dragged.
+  // Undo/redo snapshots the whole list, kept in memory per list, so each session and problem has its own.
+  const DG_ROOM = { w: 340, h: 200 }; // blank space right of and below the image, for lists and other objects
+  const DG_SLOT_RISE = 21; // a blank's typing spot starts this far above its line, so the text sits on the line
+  const DG_VALUE_WIDTH = 50; // blanks narrower than this are value slots (arrows attach there), wider ones hold names
+  const DG_SNAP = 14; // an arrow end this close to a target attaches to it
+  const DG_HINTS = {
+    select: 'Click a blank or anywhere to type. Tab goes to the next blank. Drag text boxes, lists and arrows to move them.',
+    pen: 'Draw with the mouse or trackpad.',
+    eraser: 'Click or drag over a mark to erase it.',
+    list: 'Click where the list should go.',
+    arrow: 'Drag from a value or list cell to its target. Ends snap into place.',
+  };
+  const dgHistory = new WeakMap(); // diagram list -> { undo: [snapshots], redo: [snapshots] }
+  const dgGeom = new Map();        // arrow -> { pts, d } from the last layout, for drawing and hit tests
+  const dg = { pid: null, list: null, canvas: null, slots: [], mode: 'select', selected: null, drag: null, editBefore: null };
+
+  const dgHist = () => { if (!dgHistory.has(dg.list)) dgHistory.set(dg.list, { undo: [], redo: [] }); return dgHistory.get(dg.list); };
+  const dgSnapshot = () => JSON.stringify(dg.list);
+  const dgItem = (id) => dg.list.find((a) => a.id === id) || null;
+  const dgTextEl = (id) => dg.canvas.querySelector(`.dg-text[data-did="${id}"]`);
+  const dgListEl = (id) => dg.canvas.querySelector(`.dg-list[data-did="${id}"]`);
+  const dgIsEditing = (el) => !!el && !!el.matches && el.matches('.dg-text, .dg-cell-input');
+  function dgBlur() { if (dgIsEditing(document.activeElement)) document.activeElement.blur(); }
+  function dgRecord(before) { // the change is already made
+    if (before === dgSnapshot()) return;
+    const h = dgHist();
+    h.undo.push(before);
+    h.redo = [];
+    save();
+    updateDgToolbar();
+  }
+  function dgRestore(from, to) {
+    const snap = from.pop();
+    if (snap === undefined) return;
+    to.push(dgSnapshot());
+    dg.list.splice(0, dg.list.length, ...JSON.parse(snap));
+    dg.selected = null;
+    save();
+    drawDiagram();
+    updateDgToolbar();
+  }
+
+  // ── Arrow targets ──
+  function dgRefEl(ref) {
+    if (!ref) return null;
+    if (ref.slot !== undefined) return dg.canvas.querySelector(`.dg-slot[data-slot="${ref.slot}"]`);
+    if (ref.text) return dgTextEl(ref.text);
+    const l = dgListEl(ref.list);
+    return l && l.querySelector(`.dg-cell[data-i="${ref.cell}"]`);
+  }
+  function dgRect(el) {
+    const c = dg.canvas.getBoundingClientRect();
+    const b = el.getBoundingClientRect();
+    return { l: b.left - c.left, t: b.top - c.top, r: b.right - c.left, b: b.bottom - c.top };
+  }
+  function dgTargets() {
+    const out = [];
+    dg.canvas.querySelectorAll('.dg-slot').forEach((el) => { if (Number(el.dataset.min) < DG_VALUE_WIDTH) out.push({ el, ref: { slot: Number(el.dataset.slot) } }); });
+    dg.canvas.querySelectorAll('.dg-text:not(.dg-slot)').forEach((el) => out.push({ el, ref: { text: el.dataset.did } }));
+    dg.canvas.querySelectorAll('.dg-cell').forEach((el) => out.push({ el, ref: { list: el.closest('.dg-list').dataset.did, cell: Number(el.dataset.i) } }));
+    return out;
+  }
+  function dgNearest([x, y], except) { // the closest target within snapping distance, or null
+    let best = null;
+    let bestDist = DG_SNAP;
+    dgTargets().forEach((t) => {
+      if (except && JSON.stringify(t.ref) === JSON.stringify(except)) return;
+      const r = dgRect(t.el);
+      const dist = Math.hypot(Math.max(r.l - x, 0, x - r.r), Math.max(r.t - y, 0, y - r.b));
+      if (dist < bestDist) { best = t; bestDist = dist; }
+    });
+    return best;
+  }
+  function dgShowSnap(t) {
+    dg.canvas.querySelectorAll('.dg-snap').forEach((el) => el.classList.remove('dg-snap'));
+    if (t) t.el.classList.add('dg-snap');
+  }
+  function dgSetArrowEnd(a, end, p) {
+    const key = end === 'from' ? 'fromRef' : 'toRef';
+    const t = dgNearest(p, end === 'from' ? a.toRef : a.fromRef);
+    dgShowSnap(t);
+    if (t) a[key] = t.ref;
+    else { delete a[key]; a[end] = p; }
+  }
+
+  // ── Arrow layout ──
+  // Attached ends are recomputed from what they point at. Arrows arriving at the same side of the same target are
+  // spread along that side, in the order of where they come from, so they don't cross or pile up.
+  const dgRound = (v) => Math.round(v * 10) / 10;
+  function dgArrivalSide(from, r, cell) {
+    const [x, y] = from;
+    if (x <= r.l) return !cell ? 'left' : y <= (r.t + r.b) / 2 ? 'top' : 'bottom'; // a later cell's left side is inside its list
+    if (y < r.t) return 'top';
+    if (y > r.b) return 'bottom';
+    return 'right';
+  }
+  function dgLayoutArrows(arrows) {
+    dgGeom.clear();
+    arrows.forEach((a) => {
+      const el = dgRefEl(a.fromRef);
+      if (a.fromRef && !el) delete a.fromRef; // its target is gone: the end stays where it was
+      if (el) { const r = dgRect(el); a.from = [dgRound((r.l + r.r) / 2), dgRound((r.t + r.b) / 2)]; }
+    });
+    const groups = new Map();
+    const tangent = new Map();
+    arrows.forEach((a) => {
+      const el = dgRefEl(a.toRef);
+      if (a.toRef && !el) delete a.toRef;
+      if (!el) return;
+      const r = dgRect(el);
+      const side = dgArrivalSide(a.from, r, !!a.toRef.list && a.toRef.cell > 0);
+      const key = `${JSON.stringify(a.toRef)}:${side}`;
+      if (!groups.has(key)) groups.set(key, { r, side, list: [] });
+      groups.get(key).list.push(a);
+    });
+    groups.forEach(({ r, side, list }) => {
+      const upright = side === 'left' || side === 'right';
+      const room = upright ? r.b - r.t : r.r - r.l;
+      const step = Math.min(9, (room - 4) / list.length);
+      list.sort((p, q) => (upright ? p.from[1] - q.from[1] : p.from[0] - q.from[0]));
+      list.forEach((a, i) => {
+        const off = (i - (list.length - 1) / 2) * step;
+        const midX = (r.l + r.r) / 2;
+        const midY = (r.t + r.b) / 2;
+        a.to = { left: [r.l, midY + off], right: [r.r, midY + off], top: [midX + off, r.t], bottom: [midX + off, r.b] }[side].map(dgRound);
+        tangent.set(a, { left: [1, 0], right: [-1, 0], top: [0, 1], bottom: [0, -1] }[side]);
+      });
+    });
+    arrows.forEach((a) => {
+      const [x1, y1] = a.from;
+      const [x2, y2] = a.to;
+      const dist = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const head = (t) => { // the two strokes of the arrowhead
+        const wing = (w) => {
+          const c = Math.cos(w);
+          const s = Math.sin(w);
+          return `${dgRound(x2 - 10 * (t[0] * c - t[1] * s))} ${dgRound(y2 - 10 * (t[0] * s + t[1] * c))}`;
+        };
+        return `M${wing(0.45)}L${x2} ${y2}L${wing(-0.45)}`;
+      };
+      const t = tangent.get(a);
+      if (!a.fromRef && !a.toRef) {
+        dgGeom.set(a, { pts: [a.from, a.to], d: `M${x1} ${y1}L${x2} ${y2}${head([(x2 - x1) / dist, (y2 - y1) / dist])}` });
+        return;
+      }
+      const end = t || [(x2 - x1) / dist, (y2 - y1) / dist];
+      const k = Math.min(60, dist * 0.4);
+      const c1 = [x1 + Math.sign(x2 - x1 || 1) * k, y1];
+      const c2 = [x2 - end[0] * k, y2 - end[1] * k];
+      const pts = Array.from({ length: 17 }, (_, i) => {
+        const u = i / 16;
+        const v = 1 - u;
+        return [0, 1].map((n) => v * v * v * a.from[n] + 3 * v * v * u * c1[n] + 3 * v * u * u * c2[n] + u * u * u * a.to[n]);
+      });
+      dgGeom.set(a, { pts, d: `M${x1} ${y1}C${c1[0]} ${c1[1]} ${dgRound(c2[0])} ${dgRound(c2[1])} ${x2} ${y2}${head(end)}` });
+    });
+  }
+  const dgNearArrow = (a, x, y) => {
+    const { pts } = dgGeom.get(a);
+    return pts.some((p, i) => i && distToSegment(x, y, pts[i - 1], p) < 9);
+  };
+
+  // ── Drawing ──
+  function drawInk() {
+    const live = dg.drag && dg.drag.kind === 'arrow' ? dg.drag.item : null;
+    const arrows = dg.list.filter((a) => a.kind === 'arrow').concat(live || []);
+    dgLayoutArrows(arrows);
+    const handles = (a) => [a.from, a.to].map(([x, y]) => `<circle class="dg-handle" cx="${x}" cy="${y}" r="4"/>`).join('');
+    const arrowHTML = (a) => `<path class="dg-arrow" d="${dgGeom.get(a).d}"/>${a.fromRef ? `<circle class="dg-dot" cx="${a.from[0]}" cy="${a.from[1]}" r="3"/>` : ''}${a.id === dg.selected ? handles(a) : ''}`;
+    dg.canvas.querySelector('.dg-layer').innerHTML = dg.list.map((a) => {
+      if (a.kind === 'pen') return `<path class="dg-pen" d="${strokePath(a.pts)}"/>`;
+      if (a.kind === 'arrow') return arrowHTML(a);
+      return '';
+    }).join('') + (live ? arrowHTML(live) : '')
+      + (dg.drag && dg.drag.kind === 'pen' ? `<path class="dg-pen" d="${strokePath(dg.drag.pts)}"/>` : '');
+    dg.canvas.querySelectorAll('.dg-text, .dg-list').forEach((el) => el.classList.toggle('selected', el.dataset.did === dg.selected));
+  }
+  function sizeDgText(el) { el.style.width = `max(${el.dataset.min || 0}px, ${el.value.length + 2}ch)`; }
+  function drawDiagram() {
+    const texts = dg.canvas.querySelector('.dg-texts');
+    const input = (cls, attrs, label, value, x, y) => `<input class="${cls}" ${attrs} value="${esc(value)}" aria-label="${label}" autocomplete="off" spellcheck="false" style="left:${x}px;top:${y}px">`;
+    const blanks = dg.slots.map(([x, line, w], i) => {
+      const a = dg.list.find((t) => t.slot === i);
+      return input('dg-text dg-slot', `data-slot="${i}" data-min="${w}"${a ? ` data-did="${a.id}"` : ''}`, `Diagram blank ${i + 1}`, a ? a.text : '', x, line - DG_SLOT_RISE);
+    });
+    const free = dg.list.filter((a) => a.kind === 'text' && a.slot === undefined).map((a) => input('dg-text', `data-did="${a.id}"`, 'Diagram text', a.text, a.x, a.y));
+    const lists = dg.list.filter((a) => a.kind === 'list').map((a) => `<div class="dg-list" data-did="${a.id}" style="left:${a.x}px;top:${a.y}px">
+        <div class="dg-grip">list</div>
+        <div class="dg-cells">${a.cells.map((v, i) => `<div class="dg-cell" data-i="${i}"><span class="dg-index">${i}</span><input class="dg-cell-input" data-min="26" data-i="${i}" value="${esc(v)}" aria-label="List index ${i}" autocomplete="off" spellcheck="false"></div>`).join('')}
+          <span class="dg-list-btns"><button type="button" class="dg-list-btn" data-dgl="add" tabindex="-1" title="Add an element" aria-label="Add an element">+</button><button type="button" class="dg-list-btn" data-dgl="remove" tabindex="-1" title="Remove the last element" aria-label="Remove the last element" ${a.cells.length > 1 ? '' : 'disabled'}>−</button></span>
+        </div>
+      </div>`);
+    texts.innerHTML = blanks.concat(free, lists).join('');
+    texts.querySelectorAll('.dg-text, .dg-cell-input').forEach(sizeDgText);
+    drawInk();
+  }
+  function updateDgToolbar() {
+    if (!dg.pid) return;
+    const bar = document.getElementById('dg-bar');
+    const h = dgHist();
+    bar.querySelectorAll('[data-dg]').forEach((b) => {
+      const k = b.dataset.dg;
+      if (DG_HINTS[k]) b.setAttribute('aria-pressed', String(dg.mode === k));
+      if (k === 'undo') b.disabled = !h.undo.length;
+      if (k === 'redo') b.disabled = !h.redo.length;
+      if (k === 'del') b.disabled = !dg.selected;
+      if (k === 'clear') b.disabled = !dg.list.length;
+    });
+    document.getElementById('dg-hint').textContent = DG_HINTS[dg.mode];
+  }
+  function setDgMode(mode) {
+    dg.mode = dg.mode === mode ? 'select' : mode;
+    dg.selected = null;
+    dg.canvas.dataset.mode = dg.mode;
+    dgShowSnap(null);
+    drawInk();
+    updateDgToolbar();
+  }
+  function deleteDgSelected() {
+    const before = dgSnapshot();
+    dg.list.splice(dg.list.findIndex((a) => a.id === dg.selected), 1);
+    dg.selected = null;
+    drawDiagram();
+    dgRecord(before);
+    updateDgToolbar();
+  }
+
+  // ── Pointer ──
+  function dgPoint(e) {
+    const r = dg.canvas.getBoundingClientRect();
+    const clamp = (v, max) => dgRound(Math.max(0, Math.min(max, v)));
+    return [clamp(e.clientX - r.left, r.width), clamp(e.clientY - r.top, r.height)];
+  }
+  function dgHitArrow(x, y) {
+    return dg.list.filter((a) => a.kind === 'arrow').reverse().find((a) => dgNearArrow(a, x, y)) || null;
+  }
+  function dgEraseAt(x, y) {
+    const inBox = (el) => { const r = dgRect(el); return x >= r.l && x <= r.r && y >= r.t && y <= r.b; };
+    const hits = dg.list.filter((a) => {
+      if (a.kind === 'arrow') return dgNearArrow(a, x, y);
+      if (a.kind === 'pen') return a.pts.length === 1 ? Math.hypot(x - a.pts[0][0], y - a.pts[0][1]) < 9
+        : a.pts.some((p, i) => i && distToSegment(x, y, a.pts[i - 1], p) < 9);
+      return inBox(a.kind === 'list' ? dgListEl(a.id) : dgTextEl(a.id));
+    });
+    if (!hits.length) return;
+    hits.forEach((a) => dg.list.splice(dg.list.indexOf(a), 1));
+    drawDiagram();
+  }
+  function addDgText([x, y]) {
+    dg.editBefore = dgSnapshot();
+    const a = { id: newId(), kind: 'text', x: Math.max(0, x - 3), y: Math.max(0, y - 11), text: '' }; // the caret lands on the click
+    dg.list.push(a);
+    drawDiagram();
+    dgTextEl(a.id).focus();
+  }
+  function addDgList([x, y]) {
+    const before = dgSnapshot();
+    const a = { id: newId(), kind: 'list', x: Math.max(0, x - 14), y: Math.max(0, y - 26), cells: [''] };
+    dg.list.push(a);
+    setDgMode('list'); // back to typing, ready for the first element
+    drawDiagram();
+    dgRecord(before);
+    dgListEl(a.id).querySelector('.dg-cell-input').focus();
+  }
+  function onDgListButton(e) {
+    const b = e.target.closest('[data-dgl]');
+    if (!b || b.disabled) return;
+    dgBlur();
+    const a = dgItem(b.closest('.dg-list').dataset.did);
+    const before = dgSnapshot();
+    if (b.dataset.dgl === 'add') a.cells.push('');
+    else a.cells.pop();
+    dg.selected = a.id;
+    drawDiagram();
+    drawInk(); // arrows to a removed element stay where they were, no longer attached
+    dgRecord(before);
+    if (b.dataset.dgl === 'add') dgListEl(a.id).querySelector('.dg-cell:last-of-type .dg-cell-input').focus();
+    updateDgToolbar();
+  }
+
+  function onDgDown(e) {
+    const active = document.activeElement;
+    if (e.button !== 0 || e.target === active) return; // inside the box being edited: normal text editing
+    const wasEditing = dgIsEditing(active);
+    if (wasEditing) active.blur();
+    if (e.target.closest('[data-dgl]')) return; // list + and −: handled on click
+    e.preventDefault();
+    dg.canvas.setPointerCapture(e.pointerId);
+    const p = dgPoint(e);
+    const before = dgSnapshot();
+    const textEl = e.target.closest('.dg-text');
+    const listEl = e.target.closest('.dg-list');
+    const sel = dgItem(dg.selected);
+    const end = dg.mode === 'select' && sel && sel.kind === 'arrow' ? ['from', 'to'].find((k) => Math.hypot(p[0] - sel[k][0], p[1] - sel[k][1]) < 9) : null;
+    if (dg.mode === 'pen') dg.drag = { kind: 'pen', before, pts: [p] };
+    else if (dg.mode === 'arrow') {
+      const item = { id: newId(), kind: 'arrow', from: p, to: p };
+      const t = dgNearest(p);
+      if (t) item.fromRef = t.ref;
+      dg.drag = { kind: 'arrow', before, item, start: p, moved: false };
+    } else if (dg.mode === 'list') dg.drag = { kind: 'new-list', before, p };
+    else if (dg.mode === 'eraser') { dg.drag = { kind: 'erase', before }; dgEraseAt(...p); }
+    else if (!end && (e.target.closest('.dg-cell-input') || (textEl && textEl.dataset.slot !== undefined))) { // the click just goes into it
+      dg.canvas.releasePointerCapture(e.pointerId);
+      e.target.focus();
+    } else if (textEl && !end) {
+      const a = dgItem(textEl.dataset.did);
+      dg.selected = a.id;
+      dg.drag = { kind: 'move-box', before, item: a, el: textEl, start: p, x: a.x, y: a.y, moved: false };
+    } else if (listEl && !end) {
+      const a = dgItem(listEl.dataset.did);
+      dg.selected = a.id;
+      dg.drag = { kind: 'move-box', before, item: a, el: listEl, start: p, x: a.x, y: a.y, moved: false };
+    } else {
+      const a = end ? sel : dgHitArrow(...p);
+      if (a) dg.drag = { kind: 'move-arrow', before, item: a, end, start: p, from: a.from, to: a.to };
+      else dg.drag = { kind: 'new-text', before, p, skip: wasEditing || !!dg.selected }; // a click that only ends an edit or a selection doesn't start a box
+      dg.selected = a ? a.id : null;
+    }
+    drawInk();
+    updateDgToolbar();
+  }
+  function onDgMove(e) {
+    const d = dg.drag;
+    const p = dgPoint(e);
+    if (!d) {
+      if (dg.mode === 'arrow') dgShowSnap(dgNearest(p));
+      return;
+    }
+    const dx = d.start ? p[0] - d.start[0] : 0;
+    const dy = d.start ? p[1] - d.start[1] : 0;
+    if (d.kind === 'pen') {
+      const last = d.pts[d.pts.length - 1];
+      if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 1.5) return;
+      d.pts.push(p);
+      drawInk();
+    } else if (d.kind === 'arrow') {
+      d.moved = d.moved || Math.hypot(dx, dy) >= 8;
+      dgSetArrowEnd(d.item, 'to', p);
+      drawInk();
+    } else if (d.kind === 'erase') {
+      dgEraseAt(...p);
+    } else if (d.kind === 'move-box') {
+      if (!d.moved && Math.hypot(dx, dy) < 4) return; // a click, not a drag
+      d.moved = true;
+      d.item.x = Math.max(0, d.x + dx);
+      d.item.y = Math.max(0, d.y + dy);
+      d.el.style.left = `${d.item.x}px`;
+      d.el.style.top = `${d.item.y}px`;
+      drawInk(); // attached arrows follow
+    } else if (d.kind === 'move-arrow') {
+      if (d.end) dgSetArrowEnd(d.item, d.end, p);
+      else if (Math.hypot(dx, dy) >= 4) { // dragging the line lifts the whole arrow off whatever it was attached to
+        delete d.item.fromRef;
+        delete d.item.toRef;
+        d.item.from = [d.from[0] + dx, d.from[1] + dy];
+        d.item.to = [d.to[0] + dx, d.to[1] + dy];
+      }
+      drawInk();
+    }
+  }
+  function onDgUp() {
+    const d = dg.drag;
+    if (!d) return;
+    dg.drag = null;
+    dgShowSnap(null);
+    if (d.kind === 'pen') dg.list.push({ id: newId(), kind: 'pen', pts: d.pts });
+    if (d.kind === 'arrow' && d.moved) dg.list.push(d.item);
+    if (d.kind === 'new-text') { if (!d.skip) addDgText(d.p); return; }
+    if (d.kind === 'new-list') { addDgList(d.p); return; }
+    if (d.kind === 'move-box' && !d.moved) { if (d.item.kind === 'text') d.el.focus(); return; }
+    drawInk();
+    dgRecord(d.before);
+  }
+  function onDgFocusIn(e) {
+    if (!dgIsEditing(e.target)) return;
+    if (dg.editBefore === null) dg.editBefore = dgSnapshot();
+    const list = e.target.closest('.dg-list');
+    dg.selected = (list ? list.dataset.did : e.target.dataset.did) || null;
+    drawInk();
+    updateDgToolbar();
+  }
+  function onDgFocusOut(e) {
+    const el = e.target;
+    if (!dgIsEditing(el)) return;
+    const a = dgItem(el.dataset.did);
+    if (a && !a.text.trim()) { // nothing typed: no box left behind
+      dg.list.splice(dg.list.indexOf(a), 1);
+      dg.selected = null;
+      if (el.dataset.slot !== undefined) delete el.dataset.did;
+      else setTimeout(() => { el.remove(); if (dg.canvas) drawInk(); });
+    }
+    const before = dg.editBefore;
+    dg.editBefore = null;
+    dgRecord(before);
+    drawInk();
+    updateDgToolbar();
+  }
+  function onDgInput(e) {
+    const el = e.target;
+    const list = el.closest('.dg-list');
+    if (list) {
+      dgItem(list.dataset.did).cells[el.dataset.i] = el.value;
+      sizeDgText(el);
+      drawInk(); // the cell may have widened
+      saveSoon();
+      return;
+    }
+    let a = dgItem(el.dataset.did);
+    if (!a) { // first character in a blank
+      const [x, line] = dg.slots[el.dataset.slot];
+      a = { id: newId(), kind: 'text', slot: Number(el.dataset.slot), x, y: line - DG_SLOT_RISE, text: '' };
+      dg.list.push(a);
+      el.dataset.did = a.id;
+      dg.selected = a.id;
+      updateDgToolbar();
+    }
+    a.text = el.value;
+    sizeDgText(el);
+    drawInk();
+    saveSoon();
+  }
+
+  function renderDiagram(fig) {
+    const tool = (k, label) => `<button class="ann-btn" data-dg="${k}" title="${label}" aria-label="${label}">${icon(k)}</button>`;
+    const w = Number(fig.width) + DG_ROOM.w;
+    const h = Number(fig.height) + DG_ROOM.h;
+    return `<details class="dg" open>
+      <summary>Environment diagram <span class="dg-note">Scratch work, not graded. Saved in this browser.</span></summary>
+      <div class="annot-bar dg-bar" id="dg-bar" role="toolbar" aria-label="Diagram tools">
+        ${tool('select', 'Type and move')}${tool('pen', 'Red pen')}${tool('eraser', 'Eraser')}${tool('list', 'New list')}${tool('arrow', 'Arrow')}
+        <span class="ann-sep" aria-hidden="true"></span>
+        ${tool('undo', 'Undo')}${tool('redo', 'Redo')}${tool('del', 'Delete selected')}${tool('clear', 'Clear the diagram')}
+        <span class="annot-hint" id="dg-hint" aria-live="polite"></span>
+      </div>
+      <div class="dg-scroll">
+        <div class="dg-canvas" id="dg-canvas" style="width:${w}px;height:${h}px">
+          <img src="${esc(fig.src)}" width="${esc(fig.width)}" height="${esc(fig.height)}" alt="${esc(fig.alt)}" draggable="false">
+          <svg class="dg-layer" width="${w}" height="${h}" aria-hidden="true"></svg>
+          <div class="dg-texts"></div>
+        </div>
+      </div>
+    </details>`;
+  }
+  // Built only when the problem changes (see buildLeft); it sits outside what ordinary re-renders replace.
+  function buildDiagram(g) {
+    const slot = document.getElementById('diagram-slot');
+    const fig = PROBLEMS[g.pid].figure;
+    dgBlur();
+    Object.assign(dg, { pid: null, list: null, canvas: null, selected: null, drag: null, editBefore: null });
+    slot.innerHTML = fig ? renderDiagram(fig) : '';
+    if (!fig) return;
+    const all = diagramsOf();
+    dg.pid = g.pid;
+    dg.slots = fig.slots || [];
+    dg.list = all[g.pid] || (all[g.pid] = []);
+    dg.canvas = document.getElementById('dg-canvas');
+    dg.canvas.dataset.mode = dg.mode;
+    dg.canvas.addEventListener('pointerdown', onDgDown);
+    dg.canvas.addEventListener('pointermove', onDgMove);
+    dg.canvas.addEventListener('pointerup', onDgUp);
+    dg.canvas.addEventListener('pointercancel', onDgUp);
+    dg.canvas.addEventListener('pointerleave', () => { if (!dg.drag) dgShowSnap(null); });
+    dg.canvas.addEventListener('click', onDgListButton);
+    dg.canvas.addEventListener('focusin', onDgFocusIn);
+    dg.canvas.addEventListener('focusout', onDgFocusOut);
+    dg.canvas.addEventListener('input', onDgInput);
+    dg.canvas.addEventListener('keydown', (e) => {
+      if (dgIsEditing(e.target) && (e.key === 'Enter' || e.key === 'Escape')) { e.target.blur(); e.stopPropagation(); }
+    });
+    document.getElementById('dg-bar').addEventListener('click', onDgTool);
+    drawDiagram();
+    updateDgToolbar();
+  }
+  function onDgTool(e) {
+    const b = e.target.closest('[data-dg]');
+    if (!b || b.disabled) return;
+    const k = b.dataset.dg;
+    dgBlur();
+    if (DG_HINTS[k]) setDgMode(k);
+    else if (k === 'undo') dgRestore(dgHist().undo, dgHist().redo);
+    else if (k === 'redo') dgRestore(dgHist().redo, dgHist().undo);
+    else if (k === 'del') { if (dg.selected) deleteDgSelected(); }
+    else if (k === 'clear') {
+      if (!dg.list.length || !confirm('Clear everything you added to this diagram?')) return;
+      const before = dgSnapshot();
+      dg.list.length = 0;
+      dg.selected = null;
+      drawDiagram();
+      dgRecord(before);
+      announce('Diagram cleared. Use Undo to restore it.');
+    }
+  }
+
   // ───────────────────────────── Timer (timestamp-based) ─────────────────────────────
   function timeLeft(t) {
     if (!t) return null;
@@ -852,6 +1357,7 @@
     leftPid = null;
     cachedFor = null;
     ui.annMode = 'none';
+    dg.mode = 'select';
     ui.navOpen = false;
     ui.confirmReveal = null;
     ui.activeBlank = null;
@@ -1193,12 +1699,19 @@
     undo: '<path d="M9 7L5 11l4 4" /><path d="M5 11h9a5 5 0 010 10h-3" />',
     redo: '<path d="M15 7l4 4-4 4" /><path d="M19 11h-9a5 5 0 000 10h3" />',
     clear: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />',
+    select: '<path d="M6 3l12 10-5.5 1L16 20l-2.5 1.2-3.3-6L6 19z" />',
+    arrow: '<path d="M4 20L20 4" /><path d="M11 4h9v9" />',
+    list: '<path d="M2 8h20v8H2zM9 8v8M15 8v8" />',
+    del: '<path d="M6 6l12 12M18 6L6 18" />',
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
     msg: '<path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />',
   };
   const FEEDBACK_URL = 'https://forms.gle/VqhUJDZj1UNJq3gRA'; // Google Form, opened in a new tab; nothing is collected here
   const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
 
+  // These problems showed their figure here before it moved to the diagram workspace. Saved pen strokes are anchored
+  // to a block's index, so an empty block keeps the strokes on the blocks below it in place.
+  const FIGURE_SLOT = new Set(['fa24-2', 'sp24-2']);
   function renderLeft(g) {
     const pr = PROBLEMS[g.pid];
     const ex = EXAMS[pr.exam];
@@ -1220,7 +1733,7 @@
         <div class="src"><span>Source: <a href="${esc(ex.url)}" target="_blank" rel="noopener">${esc(ex.label)}</a>, Q${esc(pr.number)}</span>${topics}</div>
         <h2>${esc(pr.number)}. <span class="pts">(${pr.points.toFixed(1)} points)</span>${esc(pr.title)}</h2>
         <div class="annot-text" data-annot="intro"></div>
-        ${pr.figure ? `<figure class="exam-figure"><img src="${esc(pr.figure.src)}" width="${esc(pr.figure.width)}" height="${esc(pr.figure.height)}" alt="${esc(pr.figure.alt)}" draggable="false"><figcaption>Diagram from the exam PDF</figcaption></figure>` : ''}
+        ${FIGURE_SLOT.has(g.pid) ? '<div hidden></div>' : ''}
         <div class="editor">
           <div class="editor-head">
             <span class="editor-file">${esc(fileName(g.pid))}</span>
@@ -1423,6 +1936,7 @@
     renderProse(g.pid, 'intro');
     renderProse(g.pid, 'outro');
     layoutStrokes();
+    buildDiagram(g);
     const art = article();
     const svg = art.querySelector('.annot-layer');
     svg.addEventListener('pointerdown', onOverlayDown);
@@ -1703,7 +2217,7 @@
       <div id="p-banner">${bannerHTML(s)}</div>
       <div class="p-main">
         <div class="pane pane-left" id="pane-left"></div>
-        <div class="pane pane-right" id="pane-right"></div>
+        <div class="pane pane-right" id="pane-right"><div id="diagram-slot"></div><div id="right-body"></div></div>
       </div>
       <footer class="p-footer${isExam(s) ? ' exam' : ''}" id="p-footer">${footerHTML(s)}</footer>
     </div>`;
@@ -1933,7 +2447,7 @@
       }
       const right = document.getElementById('pane-right');
       const sameGroup = right.dataset.group === g.pid;
-      right.innerHTML = isReview(s) ? renderReviewRight(g, s) : renderRight(g, s);
+      document.getElementById('right-body').innerHTML = isReview(s) ? renderReviewRight(g, s) : renderRight(g, s); // the diagram beside it is left alone
       right.dataset.group = g.pid;
       if (!sameGroup) right.scrollTop = 0;
       if (leftPid !== g.pid) buildLeft(g);
@@ -2286,7 +2800,7 @@
     saveSoon();
     if (leftPid) fillBlanks(editors[leftPid]); // typed answers show in the code as you type
     if (isReview(s)) { // keep the "current review answer" panel in step without touching the box being typed in
-      const right = document.getElementById('pane-right');
+      const right = document.getElementById('right-body');
       if (right) right.innerHTML = renderReviewRight(curGroup(), s);
       return;
     }
@@ -2302,11 +2816,13 @@
         return;
       }
       if (ui.annMode !== 'none') { setAnnMode(ui.annMode); return; }
+      if (dg.pid && dg.mode !== 'select') { setDgMode('select'); return; }
     }
     if (ui.screen !== 'practice' || e.metaKey || e.ctrlKey || e.altKey) return;
     // Never steal keys from editing: answer boxes, CodeMirror's hidden textarea, choices, contenteditable.
     const tag = e.target.tagName;
     if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || e.target.isContentEditable || e.target.closest('.CodeMirror')) return;
+    if (dg.pid && dg.selected && (e.key === 'Delete' || e.key === 'Backspace')) { deleteDgSelected(); e.preventDefault(); return; }
     const cell = e.target.closest('.nav-cell');
     const s = cur();
     if (cell && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {

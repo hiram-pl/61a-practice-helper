@@ -164,10 +164,50 @@ mark.hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0; }
 .problem h2 .pts { font-weight: 700; margin-right: 14px; }
 .problem p { margin: 0 0 10px; }
 
+/* Diagram workspace (right pane) */
+.dg { margin-bottom: 18px; font-family: var(--sans); }
+.dg summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 2px 0 6px; }
+.dg-note { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+.dg-bar { flex-wrap: wrap; max-width: none; }
+.dg-bar .annot-hint { flex-basis: 100%; margin: 2px 0 0; min-height: 16px; }
+.ann-btn[data-dg="pen"] { color: #c62828; }
+.dg-scroll { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.dg-canvas { position: relative; user-select: none; }
+.dg-canvas img { position: absolute; left: 0; top: 0; display: block; max-width: none; }
+.dg-layer { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; }
+.dg-layer path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.dg-pen { stroke: #d62828; stroke-width: 2.2; opacity: .9; }
+.dg-arrow { stroke: var(--accent); stroke-width: 1.8; }
+.dg-dot { fill: var(--accent); }
+.dg-handle { fill: #fff; stroke: var(--accent); stroke-width: 1.5; }
+.dg-text { position: absolute; font-family: var(--mono); font-size: 13px; line-height: 20px; height: 22px; min-width: 3ch; padding: 0 2px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--accent); outline: none; cursor: grab; touch-action: none; }
+.dg-text:hover { border-color: var(--line-strong); }
+.dg-text.selected, .dg-text:focus { border-color: var(--accent); background: #fff; }
+.dg-text:focus { cursor: text; }
+.dg-slot { cursor: text; background: rgba(0, 50, 98, .06); }
+.dg-canvas:not([data-mode="select"]) .dg-slot:not(:focus) { background: transparent; border-color: transparent; } /* drawing: only typed text shows */
+.dg-list { position: absolute; font-family: var(--mono); font-size: 13px; cursor: grab; touch-action: none; }
+.dg-grip { font-family: var(--sans); font-size: 11px; color: var(--muted); line-height: 14px; padding-left: 1px; }
+.dg-list.selected .dg-grip { color: var(--accent); font-weight: 600; }
+.dg-cells { display: flex; align-items: center; }
+.dg-cell { display: flex; flex-direction: column; background: #ffffc6; border: 1px solid #66625a; border-left-width: 0; padding: 0 1px; }
+.dg-cell:first-child { border-left-width: 1px; }
+.dg-index { font-family: var(--sans); font-size: 10px; line-height: 11px; color: #77736a; padding-left: 2px; }
+.dg-cell-input { font: inherit; line-height: 18px; height: 20px; padding: 0 2px; border: 0; background: transparent; color: var(--ink); outline: none; text-align: center; }
+.dg-cell-input:focus { background: #fff; }
+.dg-list-btns { display: inline-flex; margin-left: 4px; gap: 2px; }
+.dg-list-btn { width: 18px; height: 18px; padding: 0; line-height: 16px; font-size: 14px; color: var(--accent); background: #fff; border: 1px solid var(--line-strong); border-radius: 4px; }
+.dg-list-btn:hover:not(:disabled) { background: var(--accent-soft); }
+.dg-list-btn:disabled { opacity: .35; cursor: default; }
+.dg-snap { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dg-canvas:not([data-mode="select"]) .dg-list-btns { display: none; }
+.dg-canvas:not([data-mode="select"]) .dg-list { pointer-events: none; }
+.dg-canvas[data-mode="pen"], .dg-canvas[data-mode="arrow"], .dg-canvas[data-mode="list"] { cursor: crosshair; touch-action: none; }
+.dg-canvas[data-mode="eraser"] { cursor: cell; touch-action: none; }
+.dg-canvas[data-mode="select"] { cursor: text; }
+.dg-canvas:not([data-mode="select"]) .dg-text { pointer-events: none; }
+
 /* Scratch code editor (CodeMirror, dark like PrairieLearn) */
-.exam-figure { margin: 10px 0 12px; }
-.exam-figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
-.exam-figure figcaption { font-family: var(--sans); font-size: 12px; color: var(--muted); margin-top: 4px; }
 .editor { border: 1px solid #1e1f1c; border-radius: 8px; overflow: hidden; margin: 10px 0 6px; font-family: var(--sans); }
 .editor-head { display: flex; align-items: center; gap: 10px; background: #f1f2f4; border-bottom: 1px solid #1e1f1c; padding: 7px 10px 7px 14px; }
 .editor-file { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--ink); }
