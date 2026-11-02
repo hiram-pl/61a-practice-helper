@@ -26,7 +26,7 @@ to test a served copy. `npm run test:guides` needs `python3`.
 | `phase6c_test_bank` | The 28 shipped suites in Pyodide (official passes, a wrong answer is caught); real Practice/Exam/Review flow |
 | `phase6b_tests` | Verified tests (fixture suites, test-only): Passed X/Y, per-case details, not-run cases, case timeout, isolation, unverified suites ignored, exam/review safety |
 | `phase8_2024_exams` | Fall 2024 / Spring 2024 Midterm 2: structure and points vs the PDFs, full exams in order, official answers score 45/45 and 50/50, A+ staff-graded, history unchanged, topic practice, diagram image, saved-filter migration, Run Code suite |
-| `diagram_workspace` | Environment diagram workspace (pen, typing in blanks, lists, magnetic arrows, undo/redo, saving, exam to review) |
+| `diagram_workspace` | Environment diagram workspace (pen, typing in blanks, lists, magnetic arrows, undo/redo, saving, exam to review) and the Python Tutor link (the classes and calls it adds) |
 | `study_guides_doctest` | every study-guide example runs and prints what it shows |
 | `verify_test_bank` | every verified suite passes with the official solution and all accepted answers, and fails for every wrong choice and listed wrong answer (local Python, same harness as the browser) |
 

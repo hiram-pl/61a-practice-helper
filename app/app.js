@@ -1556,7 +1556,7 @@
 
       <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a><span class="feedback-note">Your feedback can make this platform better!</span></div>
       <div class="notice">No account needed. Your answers, code notes and annotations are saved in <b>this browser on this device</b> and are gone if you clear site data.</div>
-      <p class="disclaimer">Privacy: this site uses Cloudflare Web Analytics, which collects aggregate traffic statistics (such as visits and page views) without cookies. Your answers, code, grades and exam history stay in your browser’s localStorage and are never sent anywhere.</p>
+      <p class="disclaimer">Privacy: this site uses Cloudflare Web Analytics, which collects aggregate traffic statistics (such as visits and page views) without cookies. Your answers, code, grades and exam history stay in your browser’s localStorage and are never sent anywhere, unless you choose Python Tutor on a question, which opens pythontutor.com with that question’s code.</p>
       <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024 and Spring 2024) and credited on each question. Explanations were written for this prototype and are not official.</p>
     </main>`;
   }
@@ -1794,11 +1794,18 @@
     return `<div class="run-slot" id="run-slot-${pid}" data-run-slot="${pid}">
       <div class="run-bar">
         <button class="btn btn-sm btn-run" id="run-btn" data-action="run-code" title="${suite ? 'Run this code and its verified tests' : 'Run this code with Python in your browser'}">▶ Run Code</button>
+        <button class="btn btn-sm" id="tutor-btn" data-action="open-tutor" title="Step through this code in Python Tutor. Opens pythontutor.com in a new tab with the code from the editor.">Python Tutor ↗</button>
         ${suite ? `<span class="run-suite" id="run-suite">Includes ${plural(suite.cases.length, 'verified test')}</span>` : ''}
         <span class="run-status" id="run-status" role="status" aria-live="polite"></span>
       </div>
       <div class="run-console" id="run-console" hidden></div>
     </div>`;
+  }
+  // Composing Programs' Python Tutor reads its starting code from the URL hash. Frames of exited functions stay
+  // visible (cumulative), like the diagrams on the exams.
+  function openTutor(pid) {
+    const code = window.CS61A_TUTOR.build(pid, runnableCode(pid), window.CS61A_BANK, window.CS61A_TEST_SUITES);
+    window.open(`https://pythontutor.com/cp/composingprograms.html#code=${encodeURIComponent(code)}&cumulative=true&curInstr=0&mode=edit&py=3`, '_blank', 'noopener');
   }
   // Console Output for one run, then Test Results when the problem has a verified suite.
   function runOutputHTML(r) {
@@ -2586,6 +2593,7 @@
         return;
       }
       case 'run-code': runCode(); return;
+      case 'open-tutor': openTutor(curGroup().pid); return;
       case 'goto-insights': {
         const el = document.getElementById('insights');
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.focus({ preventScroll: true }); }

@@ -815,5 +815,5 @@ Tree(1, [Tree(2, [Tree(3)])])`),
       ],
     },
   ];
-  return { version: 1, suites };
+  return { version: 1, suites, LINK, TREE };
 })();
