@@ -66,7 +66,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(S.exam && S.exam.kind === 'full' && JSON.stringify(S.exam.groups.map((g) => g.pid)) === JSON.stringify(sp), `full exam: all ${sp.length} groups in original order, no shuffle`);
   ok(S.exam.ids.length === sp.reduce((t, p) => t + parts(p).length, 0), 'full exam: every subpart included');
   ok(S.exam.timer === null && await text('.timer') === 'Untimed', 'untimed exam shows "Untimed"');
-  ok(await text('.p-header .brand') === 'CS 61A Exam' && /Spring 2025 Midterm 2/.test(await text('.set-name')), 'header shows exam title + Exam tag');
+  ok(await text('.p-header .brand') === 'CS 61A & C88C Exam' && /Spring 2025 Midterm 2/.test(await text('.set-name')), 'header shows exam title + Exam tag');
 
   // ─── 5. No feedback during the exam ───
   const noFeedback = async () => !(await has('[data-action="check"]')) && !(await has('[data-action="reveal"]')) && !(await has('.feedback')) && !(await has('.choice.correct, .choice.wrong, .choice.missed')) && !(await has('.selfcheck-note:not(:empty)')) ;
@@ -127,7 +127,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(await has(`#part-${mcQ.id} .choice.eliminated`) && await page.$eval('[data-action="mark"]', (b) => b.getAttribute('aria-pressed')) === 'true', 'eliminations + marks restored after resume');
   await page.reload();
   await page.waitForSelector('#pane-right .part', { timeout: 5000 });
-  ok(await text('.p-header .brand') === 'CS 61A Exam', 'refresh mid-exam reopens the exam directly (no Save & Leave needed)');
+  ok(await text('.p-header .brand') === 'CS 61A & C88C Exam', 'refresh mid-exam reopens the exam directly (no Save & Leave needed)');
 
   // ─── 10. Submit with unanswered ───
   dialogAnswer = false;
