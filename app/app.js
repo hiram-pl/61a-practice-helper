@@ -1465,7 +1465,7 @@
       <button class="landing-hit" data-action="enter" aria-label="CS61A Practice: Practice, Learn, Master. Start Practicing">
         <img src="assets/home_page.jpg" alt="" draggable="false">
       </button>
-      <div class="landing-foot">${resume}<span class="landing-hint">Click anywhere to start</span><span class="landing-byline">by Jacob Kao</span></div>
+      <div class="landing-foot">${resume}<span class="landing-hint">Click anywhere to start</span><span class="landing-byline">Made by Jacob Kao and Osbert Huang</span></div>
     </main>`;
   }
 
@@ -1530,7 +1530,7 @@
     const mode = p.mode === 'exam' ? 'exam' : 'practice';
     const modeBtn = (m, title, sub) => `<button class="mode-opt" id="mode-${m}" data-action="mode" data-v="${m}" aria-pressed="${mode === m}"><b>${title}</b><span>${sub}</span></button>`;
     return `<main class="home">
-      <div class="home-head"><div><button class="home-brand" data-action="landing" title="Back to the welcome page"><h1>CS 61A Practice</h1></button><p class="tagline">Past-exam questions, one at a time. Pick topics, set a timer, check your work.</p></div></div>
+      <div class="home-head"><div><button class="home-brand" data-action="landing" title="Back to the welcome page"><h1>CS 61A &amp; C88C Exam Practice</h1></button><p class="tagline">Past-exam questions, one at a time. Pick topics, set a timer, check your work.</p></div></div>
       ${examResumeHTML()}
       ${resume}
 
@@ -2186,7 +2186,7 @@
       : exam ? `<p>Answer every part; nothing is graded until you <b>Submit Exam</b>, and no answers or solutions are shown before then. You can eliminate choices, mark questions for review, and jump between questions with the navigator.</p>
         <p><b>Save &amp; Leave</b> pauses the timer and keeps everything (answers, scratch code, annotations, eliminations, marks) for later.${t ? ' When the timer reaches 0:00 the exam is submitted automatically.' : ''}</p>`
       : '<p>All parts of a question are shown together on the right. Your answers fill the matching blanks in the code on the left. Use <b>Check Answer</b> to grade a part, or <b>Show Solution</b> to see the official answer.</p>';
-    return `<div class="left"><div class="brand">${exam ? 'CS 61A Exam' : 'CS 61A Practice'}</div>
+    return `<div class="left"><div class="brand">${exam ? 'CS 61A &amp; C88C Exam' : 'CS 61A &amp; C88C Practice'}</div>
         <div class="set-name">${esc(s.title)} · ${exam ? `<span class="mode-tag">${isReview(s) ? 'Review' : 'Exam'}</span> · ` : ''}<button class="directions-btn" data-action="directions" aria-expanded="${ui.dirOpen}">Directions ▾</button></div></div>
       <div class="center"><span class="progress">Q ${s.index + 1} / ${s.groups.length}</span></div>
       ${timer}
@@ -2461,7 +2461,7 @@
       const work = document.getElementById('review-work'); // review: the editable answers live under the problem
       if (work) work.innerHTML = renderReviewWork(g, s);
       fillBlanks(editors[g.pid]);
-      document.title = `Q${s.index + 1} · ${isExam(s) ? (isReview(s) ? 'Exam review' : 'Exam') : 'CS 61A Practice'}`;
+      document.title = `Q${s.index + 1} · ${isExam(s) ? (isReview(s) ? 'Exam review' : 'Exam') : 'CS 61A & C88C Exam Practice'}`;
     } else {
       detachEditors();
       if (leftObserver) leftObserver.disconnect();
@@ -2469,7 +2469,7 @@
       app.dataset.shell = '';
       app.innerHTML = ui.screen === 'results' ? renderResults() : ui.screen === 'exam-results' ? renderExamResults(attemptById(ui.attemptId))
         : ui.screen === 'landing' ? renderLanding() : renderHome();
-      document.title = ui.screen === 'exam-results' ? 'Exam results · CS 61A Practice' : 'CS 61A Practice';
+      document.title = ui.screen === 'exam-results' ? 'Exam results · CS 61A & C88C Exam Practice' : 'CS 61A & C88C Exam Practice';
     }
 
     if (activeId) {

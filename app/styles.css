@@ -44,7 +44,7 @@ p code, li code, .rich code { background: var(--code-bg); padding: 0 3px; border
 /* ─────────── Home ─────────── */
 .home { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
 .home-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
-.home h1 { font-family: var(--serif); font-size: 34px; margin: 0; color: var(--accent); }
+.home h1 { font-family: var(--serif); font-size: 34px; line-height: 1.2; margin: 0; color: var(--accent); }
 .home .tagline { color: var(--muted); margin: 4px 0 0; }
 .feedback-row { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; }
 .feedback-row + .notice { margin-top: 10px; }
