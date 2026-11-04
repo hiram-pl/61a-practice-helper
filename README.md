@@ -1,6 +1,6 @@
 # CS 61A Practice: prototype
 
-A no-login, browser-based practice tool for CS 61A, laid out like the Digital SAT (problem on the left, answer on the right, timer at the top right). It is seeded with questions from CS 61A **Midterm 2** of **Fall 2025**, **Spring 2025**, **Fall 2024** and **Spring 2024** (`mt2/`).
+A no-login, browser-based practice tool for CS 61A, laid out like the Digital SAT (problem on the left, answer on the right, timer at the top right). It is seeded with questions from CS 61A **Midterm 2** of **Fall 2025**, **Spring 2025**, **Fall 2024**, **Spring 2024**, **Fall 2023** and **Spring 2023** (`mt2/`).
 
 ## Run it
 
@@ -33,7 +33,7 @@ To deploy, upload the `app/` folder to any static host (Netlify drop, Vercel, Gi
 - **Navigator:** a "Question N of M" popover showing which questions are answered, unanswered, or marked for review. Keyboard: `←`/`→` move between questions, `M` marks for review.
 - **Run Code:** in Practice Mode and in the editable exam review, **Run Code** under the scratch editor runs the code with Python in your browser ([Pyodide](https://pyodide.org) 0.26.4 in a Web Worker) and shows the console output and any error. It runs exactly what the editor shows, with your current answers in the blanks; an unanswered blank fails as a syntax error. Each run starts with fresh globals, and a run is stopped after 5 seconds (the worker is restarted). Running is feedback only: it never changes answers, grades or scores, and it is turned off during a live exam.
 - **Verified tests:** when a question has a *verified* test suite in `app/data/test_suites.js`, the same Run Code click also runs its doctest cases and shows PrairieLearn-style results ("Passed 3/5 tests", with expandable Input / Expected / Actual per case). Each case runs in a fresh namespace; a case that runs over 5 seconds is marked "Timed out" and the remaining cases "Not run" (never counted as passed). Questions without a verified suite show Console Output only.
-- **Verified test bank:** 28 coding problems from the four midterms have suites: the exam's own doctests plus added boundary cases, each labelled "From the exam" or "Added". What Would Python Display, environment-diagram and order-of-growth questions have none, and neither do sp25 Q3(b) and sp24 Q4(b), where a wrong choice runs exactly like the official answer, so tests can't tell them apart. Suites that need the course's `Link`/`Tree` classes, or functions from earlier parts, provide them in a setup that is named under the results. Every suite is validated by `tests/verify_test_bank.js`: it must pass with the official solution and every accepted answer, and fail for every wrong multiple-choice option and a list of plausible wrong answers (487 versions). The suites were generated and validated by Claude Code and have not been reviewed by course staff.
+- **Verified test bank:** 40 coding problems from the six midterms have suites: the exam's own doctests plus added boundary cases, each labelled "From the exam" or "Added". What Would Python Display, environment-diagram and order-of-growth questions have none, and neither do sp25 Q3(b) and sp24 Q4(b), where a wrong choice runs exactly like the official answer, so tests can't tell them apart, or fa23 Q4(a), whose select-all blank has three correct options. fa23 Q5(e) and sp23 Q2(b) have none because their code can't run without part (a)'s definitions, and Run Code runs the student's code on its own before any tests. Suites that need the course's `Link`/`Tree` classes, or functions from earlier parts, provide them in a setup that is named under the results. Every suite is validated by `tests/verify_test_bank.js`: it must pass with the official solution and every accepted answer, and fail for every wrong multiple-choice option and a list of plausible wrong answers (645 versions). The suites were generated and validated by Claude Code and have not been reviewed by course staff.
   - Needs an internet connection the first time: Python (about 10 MB) is downloaded from the jsDelivr CDN, then cached by the browser. It works both when the site is served and when `index.html` is opened directly.
   - Code that uses the course's `Link` or `Tree` classes needs those definitions in the editor; the runner doesn't add them.
   - The worker keeps student code off the page and away from saved data, but it is not a security sandbox (code can still make network requests).
@@ -49,7 +49,7 @@ app/
   styles.css          all styling (light, exam-style)
   app.js              screens, state, timer, grading, scratch editor, persistence
   runner.js           Run Code: Pyodide in a Web Worker (lazy load, timeout, fresh globals per run)
-  assets/             landing image; environment-diagram images from the 2024 exam PDFs
+  assets/             landing image; environment-diagram and illustration images from the exam PDFs
   vendor/codemirror/  CodeMirror 5.65 (bundled locally, so it works offline)
   data/questions.js   TOPICS, PROBLEMS (left-pane context), QUESTIONS, ANSWER_KEY (kept separate)
   data/study_guides.js  Learning Insights study guides (examples checked with doctest)
@@ -73,8 +73,11 @@ Topics are configured in `TOPICS`. A topic with no questions (such as Scheme) sh
 - The PDFs had a few typos, which I corrected: `num-slices` → `num_slices`, `count-pizzas` → `count_pizzas`, `"-" + x` → `'_' + x`.
 - Explanations were written for this prototype and are **not official**. Questions without one say "Explanation not yet available."
 - Points for the individual blanks of Fall 2025 Q4(b) aren't listed in the exam, so they are not shown.
-- Fall 2024 Midterm 2 totals 45 points (the others total 50); these are the PDFs' own point values.
-- The 2024 environment-diagram questions show the diagram image from the exam PDF (extracted losslessly) under the question text. The Spring 2024 solution's completed diagram is only an external link in the PDF, so it isn't included.
+- Fall 2024, Fall 2023 and Spring 2023 Midterm 2 total 45 points (the others total 50); these are the PDFs' own point values.
+- Environment-diagram questions use the diagram image from the exam PDF (extracted losslessly) in the diagram workspace; `figure.slots` marks its empty blanks. The Spring 2024 solution's completed diagram is only an external link in the PDF, so it isn't included, and no official completed diagram is shown in review (the workspace is ungraded scratch work).
+- Fall 2023 Q5's drawing of the doctest trees is not a diagram to fill in, so it is an `illustration`: shown under the question text, with no workspace.
 - Spring 2024 Q4(d) prints blank (b) as `if _______` without a colon; the colon is added so the filled-in code runs. Other wording (including the PDF's "postive" in Fall 2024 Q5(b)) is kept as printed.
-- A saved practice filter that had both 2025 exams selected (the old default) picks up the 2024 exams on the next load; a filter narrowed to one exam is kept.
+- A saved practice filter that had every exam of its time selected (the default) picks up exams added later on the next load; a filter narrowed on purpose is kept.
+- Spring 2023 Q5(b) i asks for blanks (c) and (d) together, as one 3-point part, so the code has one two-line blank labelled (c, d). Spring 2023 Q3(a) iii asks about a second `prefix` implementation, so it is its own problem (like Spring 2025 Q2(c)).
+- Fall 2023 Q6(c): the official solution also accepted Constant; this site only marks Linear (the marked answer) correct, and the explanation says so.
 - **Rights:** this is an independent student project, not an official CS 61A service. Get permission from course staff before publishing exam text publicly.

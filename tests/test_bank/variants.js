@@ -319,4 +319,138 @@ module.exports = {
       { 'A+': 't.label + 1 == b.label and has_strip(b) and not only_strips(b)' },
     ],
   },
+
+  // ── Fall 2023 Midterm 2 ──
+  'fa23-3': {
+    wrong: [
+      { b: 'self.books[0]' },
+      { b: 'title' },
+      { b: 'Book(title, self)' },
+      { b: 'self.books' },
+    ],
+    alternatives: [
+      { b: "self.books.get(title, None)" },
+    ],
+  },
+  'fa23-4b': {
+    wrong: [
+      { d: 'k * k' },
+      { d: '[k]' },
+      { d: '[total, k]' },
+      { e: 'squares(total - k * k, k + 1)' },
+      { e: 'squares(total, k)' },
+      { e: 'squares(total - k, k)' },
+      { e: 'squares(k * k, k)' },
+    ],
+  },
+  'fa23-5': {
+    wrong: [
+      { a: 't.is_leaf()' },
+      { a: 'n == t.label' },
+      { a: 't.is_leaf() and n == 0' },
+      { b: 'only_paths(b, n)' },
+      { b: 'only_paths(b, n - b.label)' },
+      { b: 'b' },
+    ],
+    alternatives: [
+      { a: 'not t.branches and t.label == n' },
+    ],
+  },
+  'fa23-6': {
+    wrong: [
+      { b: 'True' },
+      { b: 'find(rest, b, lambda rest: False)' },
+      { b: 'find(s, b, lambda rest: True)' },
+      { b: 'rest.first == b' },
+      { b: 'find(rest, a, lambda rest: True)' },
+    ],
+  },
+
+  // ── Spring 2023 Midterm 2 ──
+  'sp23-2a': {
+    wrong: [
+      { a: 'self.sent = True' },
+      { a: 'sent = False' },
+      { b: 'self.sent = False' },
+      { b: 'sent = True' },
+      { c: 'self.contents.upper()' },
+      { c: 'Letter(self.contents)' },
+      { c: 'self' },
+    ],
+    alternatives: [
+      { c: 'type(self)(self.contents.upper())' },
+    ],
+  },
+  'sp23-3a': {
+    wrong: [
+      { a: 'sum(s[:k])' },
+      { a: 's[k]' },
+      { a: 'sum(s[k:])' },
+      { a: 'sum(s[:k+2])' },
+    ],
+    alternatives: [
+      { a: 'sum(s[0:k+1])' },
+    ],
+  },
+  'sp23-3b': {
+    wrong: [
+      { e: 'f(suffix.rest, total)' },
+      { e: 'f(suffix, total + suffix.first)' },
+      { e: 'f(suffix.rest, suffix.first)' },
+      { f: 'f(s, 0)' },
+      { f: 'f(s.rest, 0)' },
+      { f: 'f(s, s.first)' },
+    ],
+  },
+  'sp23-4a': {
+    wrong: [
+      { a: 'y' },
+      { a: 'exclude(y, y.label)' },
+      { a: 'exclude(t, x)' },
+      { b: 'b.label != x' },
+      { b: 't.label == x' },
+      { b: 'False' },
+    ],
+  },
+  'sp23-4b': {
+    wrong: [
+      { e: 't = exclude(t, x)' },
+      { e: 'exclude(t, x)' },
+      { e: 't.branches = exclude(t, x)' },
+      { e: 't.branches = [exclude(b, x) for b in t.branches]' },
+    ],
+    alternatives: [
+      { e: 't.branches[:] = exclude(t, x).branches' },
+    ],
+  },
+  'sp23-5a': {
+    wrong: [
+      { a: '0' },
+      { b: 'count_park(n-1) + count_park(n-2)' },
+      { b: '2 * count_park(n-1) + 2 * count_park(n-2)' },
+      { b: '3 * count_park(n-1)' },
+      { b: '2 * count_park(n-1)' },
+    ],
+  },
+  'sp23-5b': {
+    wrong: [
+      { 'c, d': "yield s + '.'" },
+      { 'c, d': "yield s + '.'\nyield s + '.'" },
+      { 'c, d': "yield s + '.'\nyield s + '<>'" },
+      { e: 'park(n-1)' },
+      { e: 'park(n)' },
+      { f: "yield s + '%'" },
+      { f: "yield '<>' + s + '<>'" },
+    ],
+    alternatives: [
+      { 'c, d': "yield '.' + s\nyield '%' + s", f: "yield '<>' + s" },  // prepending works only if (f) prepends too
+    ],
+  },
+  'sp23-5aplus': {
+    wrong: [
+      { 'A+': '(yes + s for s in f(n, k))' },
+      { 'A+': '(yes + s for s in f(n, k) if s[0] != no)' },
+      { 'A+': '(no + s for s in f(n, k) if not s or s[0] != no)' },
+    ],
+  },
 };
