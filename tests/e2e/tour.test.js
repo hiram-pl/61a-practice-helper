@@ -164,6 +164,15 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(practice.includes('run') && practice.every((s) => !shownInExam.has(s)), `practice: Run Code, and nothing already seen in the exam (${practice.join(', ')})`);
   S = await store(page);
   ok(!S.session.timer || typeof S.session.timer.runningSince === 'number', 'practice timer runs once the tips are done');
+  ok(!practice.includes('tutor'), 'no Python Tutor button on the page: no Python Tutor tip');
+  // A stand-in for the Python Tutor button (it ships on its own branch): the tip appears once the button does.
+  await page.evaluate(() => {
+    document.querySelector('.run-bar').insertAdjacentHTML('beforeend', '<button class="btn btn-sm" id="tutor-btn">Python Tutor ↗</button>');
+    window.CS61A_TOUR.update();
+  });
+  await wait(200);
+  ok(await step(page) === 'tutor' && await page.$eval('.tour-card', (c) => c.textContent.includes('every blank is filled')), 'Python Tutor button present: its tip shows');
+  await drain(page);
   await page.close();
 
   // ── End tutorial, Replay, Escape ──

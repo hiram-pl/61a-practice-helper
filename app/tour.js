@@ -55,6 +55,9 @@ window.CS61A_TOUR = (function () {
       html: '<p>What you choose or type for a part on the right appears in its blank in the code on the left, so you can read your whole solution in place.</p><p>Click a blank in the code to jump to its part.</p>' },
     { id: 'run', find: one('#run-btn'), title: 'Run Code',
       html: '<p><b>Run Code</b> runs the code in the editor with Python, right in your browser. When the question has verified tests, it also runs its doctests and shows how many pass, so you can see if your code is right.</p><p>It isn’t available during an exam, only in Practice Mode and when you review an exam.</p>' },
+    // Shows only once the Python Tutor button is on the page (it ships separately from the tour).
+    { id: 'tutor', find: one('#tutor-btn'), title: 'Python Tutor',
+      html: '<p><b>Python Tutor</b> opens this code in a new tab and steps through it line by line, drawing the environment diagram as it runs.</p><p>If the code has blanks, it unlocks once every blank is filled. Your answers don’t have to be right.</p>' },
     { id: 'mark', find: one('.mark-btn'), title: 'Mark for Review',
       html: '<p>Not sure about a question? <b>Mark it for review</b> to flag it in the question navigator, so you can find it and come back later.</p><p>Shortcut: <kbd>M</kbd>.</p>' },
     dgStep('dg-icons', 'Environment diagram', () => `<p>Draw the diagram right on the picture. Scratch work: it isn’t graded, and it’s saved in this browser.</p>${hooks.dgTools()}`),
