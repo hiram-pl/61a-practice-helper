@@ -17,7 +17,7 @@ To deploy, upload the `app/` folder to any static host (Netlify drop, Vercel, Gi
 ## What's in the prototype
 
 - **Landing page:** the `assets/home_page.jpg` banner. Clicking anywhere goes to setup.
-- **Setup:** dropdown menus for Topics (with question counts), Exams, Difficulty, Question types, Set size, and Timer (off, or 1–60 minutes).
+- **Setup:** dropdown menus for Topics (with question counts), Exams, Difficulty and Timer (off, or 1–60 minutes), and a Set size number box: 1 up to the number of matching question groups, default 5, typed or stepped with its arrows. A set always includes every part of each question it picks.
 - **Practice:** a split pane. Each question is a **group**: all of its parts (i, ii, iii…) are shown together on the right.
   - The left side shows the shared problem text and an **editable Python editor** (CodeMirror, dark theme, line numbers), where you can type notes, comments, or your own solution. Nothing is run.
   - **Answers fill the code:** picking a choice, or typing an answer, shows it in that part's blank right away. Selected choices are blue, typed answers green, and the active part's blank is outlined. Click a blank to jump to its part.

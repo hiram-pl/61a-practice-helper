@@ -66,7 +66,7 @@ ok(['fa24-1', 'fa24-2', 'sp24-1', 'sp24-2'].every((pid) => !SUITES.some((t) => t
   await page.goto(APP_URL);
 
   // ── saved practice filter: "all of the old exams" picks up the new ones; a narrowed filter is kept ──
-  const prefs = { mode: 'practice', topics: [], difficulties: ['easy', 'medium', 'hard'], types: ['single_choice', 'multi_select', 'short_answer', 'code'], size: 'all', timerOn: false, minutes: 25 };
+  const prefs = { mode: 'practice', topics: [], difficulties: ['easy', 'medium', 'hard'], size: 999, timerOn: false, minutes: 25 };
   await seed({ prefs: { ...prefs, exams: ['fa25', 'sp25'] } });
   await page.evaluate(() => { Storage.prototype.setItem = Object.getPrototypeOf(localStorage).setItem; });
   await click('[data-action="enter"]');

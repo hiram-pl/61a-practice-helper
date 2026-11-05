@@ -74,7 +74,7 @@ ok(Object.keys(B.PROBLEMS).filter((pid) => /^sp23/.test(pid)).every((pid) => !B.
   await page.goto(APP_URL);
 
   // ── a filter saved after Phase 8 (all four exams of its time selected) picks up 2023; a narrowed one is kept ──
-  const prefs = { mode: 'practice', topics: [], difficulties: ['easy', 'medium', 'hard'], types: ['single_choice', 'multi_select', 'short_answer', 'code'], size: 'all', timerOn: false, minutes: 25 };
+  const prefs = { mode: 'practice', topics: [], difficulties: ['easy', 'medium', 'hard'], size: 999, timerOn: false, minutes: 25 };
   const phase8 = ['fa25', 'sp25', 'fa24', 'sp24'];
   await seed({ prefs: { ...prefs, exams: phase8, examsKnown: phase8 } });
   await click('[data-action="enter"]');

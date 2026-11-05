@@ -112,7 +112,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(/practice purposes only and do not predict your actual exam scores/.test(await text('.exam-results')), 'exam results disclaimer present');
 
   // ── §1 / §9 practice isolation (eliminations + answers + code) ──
-  await seed({ prefs: { mode: 'practice', timerOn: false, size: 'all', types: ['single_choice'], exams: ['fa25'], difficulties: ['easy', 'medium', 'hard'], topics: [] } });
+  await seed({ prefs: { mode: 'practice', timerOn: false, size: 999, exams: ['fa25'], difficulties: ['easy', 'medium', 'hard'], topics: [] } });
   await click('[data-action="enter"]'); await click('[data-action="start"]');
   await page.waitForSelector('.elim-btn');
   const firstPart = await page.$eval('#pane-right .part', (p) => p.dataset.part);
