@@ -1,7 +1,7 @@
 // Question bank for the CS 61A practice prototype.
 //
-// Content source: CS 61A Fall 2025, Spring 2025, Fall 2024 and Spring 2024 Midterm 2 (exam + official
-// solutions), transcribed for a personal/prototype build. Verify course-material permissions before publishing.
+// Content source: CS 61A Midterm 2 of Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023 and Spring 2023
+// (exam + official solutions), transcribed for a personal/prototype build. Verify course-material permissions before publishing.
 //
 // Shape:
 //   TOPICS    – configurable category list (order = display order on the home page)
@@ -11,7 +11,9 @@
 //
 // Inline text markup (rendered safely by app.js): `code`, **bold**, *italic*.
 // Code blanks: ⟦a⟧ renders as an exam-style blank labeled (a).
-// figure (optional): an image from the exam PDF shown under the intro, { src, alt, width, height }.
+// figure (optional): the exam's environment diagram image, { src, alt, width, height, slots }, shown in the
+//   diagram workspace on the right; slots are its empty blanks as [x, line y, width] in image pixels.
+// illustration (optional): an image from the exam PDF shown under the intro, { src, alt, width, height }.
 
 window.CS61A_BANK = (function () {
   const code = (s) => s.replace(/^\n/, '').replace(/\s+$/, '');
@@ -32,13 +34,15 @@ window.CS61A_BANK = (function () {
   ];
 
   // complete: every question of the original PDF is transcribed (checked against the PDFs' point values:
-  // Fall 2025, Spring 2025 and Spring 2024 total 50 points; Fall 2024 totals 45).
+  // Fall 2025, Spring 2025 and Spring 2024 total 50 points; Fall 2024, Fall 2023 and Spring 2023 total 45).
   // Set it to false for a partial transcription; Exam Mode then labels the full exam as incomplete.
   const EXAMS = {
     fa25: { id: 'fa25', label: 'Fall 2025 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
     sp25: { id: 'sp25', label: 'Spring 2025 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
     fa24: { id: 'fa24', label: 'Fall 2024 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
     sp24: { id: 'sp24', label: 'Spring 2024 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
+    fa23: { id: 'fa23', label: 'Fall 2023 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
+    sp23: { id: 'sp23', label: 'Spring 2023 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
   };
 
   const BUBBLE_NOTE = 'For questions with circular bubbles, select exactly one choice. For questions with square checkboxes, you may select multiple choices.';
@@ -1036,6 +1040,489 @@ def only_strips(t):
     t.branches = [b for b in t.branches if ⟦A+⟧]
 `),
     },
+
+    // ───────────────────────────── Fall 2023 Midterm 2 ─────────────────────────────
+    'fa23-1': {
+      exam: 'fa23', number: '1', title: 'What Would Python Display?', points: 4,
+      intro: 'Assume the following code has been executed.',
+      code: code(`
+s = range(3, 7)
+t = iter(s)
+u = map(lambda x: 2 * x, t)
+v = [next(t), next(t)]      # This line does not cause an error
+`),
+      outro: 'Choose the output **displayed by the interactive Python interpreter** when each expression below is evaluated or *Error* if an error occurs. These expressions are evaluated **in order** and the value of later expressions may be affected by evaluating previous expressions.',
+    },
+    'fa23-2': {
+      exam: 'fa23', number: '2', title: 'Making a List, Checking it Twice', points: 6,
+      intro: 'Complete the environment diagram below and then answer the questions that follow. There is one question for each labeled blank in the diagram. The blanks with no labels have no questions associated with them and are not scored. **Some blanks may be empty or unused. If a blank contains an arrow to a function, write the function as it would appear in the diagram. Do not add frames for calls to built-in functions.**\n\n**Reminder**: `list(s)` creates a new list with the same elements as `s`; `s.pop()` removes and returns the last element of `s`.',
+      figure: { src: 'assets/fa23-mt2-q2.png', width: 557, height: 281, alt: 'From the exam: the code and an environment diagram to complete. The Global frame binds push to func push(t, x) [parent=Global] and pull to func pull() [parent=Global], and has empty boxes for s and t. Frame f1: pull [parent=Global] has empty boxes for s and for its Return value, and a box for u labeled (a). Frame f2: push [parent=Global] has empty boxes for t, x and s, and Return value None.',
+        slots: [[263, 60, 33], [263, 80, 33], [263, 121, 33], [263, 142, 33], [263, 162, 33], [263, 204, 33], [263, 225, 33], [263, 248, 33]] },
+      code: code(`
+def push(t, x):
+    s = list(t)
+    s[1].append(x)
+
+def pull():
+    s = list(t)
+    u = s.pop()
+    return u[1][0]
+
+s = [7, [8, 9]]
+t = [6, s]
+
+push(s, pull())
+print(t)
+`),
+    },
+    'fa23-3': {
+      exam: 'fa23', number: '3', title: '24-Hour Library', points: 6,
+      intro: 'Anyone can check out a book from a library and then bring that book back. Implement the `Library` and `Book` classes. A `Library` takes a list of unique strings called `titles` and constructs a `books` dictionary that has strings as keys and `Book` objects as values. Its `checkout` method takes a string `title` and returns the corresponding `Book` object if that `title` is not checked out, or prints a message. After `bring_back` is invoked on that book, it can be checked out again.',
+      code: code(`
+class Library:
+    """A library with one copy of each title that can be checked out.
+
+    >>> cs = Library(['Composing Programs', 'Python Docs', 'Berkeley Academic Guide'])
+    >>> bs = [cs.checkout('Composing Programs'), cs.checkout('Python Docs')]
+    >>> cs.checkout('Composing Programs')        # This time, no Book is returned
+    Composing Programs is checked out
+    >>> bs[0].bring_back()
+    >>> cs.checkout('Composing Programs').title  # This time, a Book is returned
+    'Composing Programs'
+    """
+    def __init__(self, titles):
+        self.books = {t: Book(t, ⟦a⟧) for t in titles}
+        self.out = []  # A list of Book objects
+
+    def checkout(self, title):
+        assert title in self.books, title + " isn't in this library's collection"
+        book = ⟦b⟧
+        if book not in self.out:
+            ⟦c⟧
+            return book
+        else:
+            print(book, 'is checked out')
+
+class Book:
+    def __init__(self, title, library):
+        self.title = title      # a string
+        self.library = library  # a Library object
+
+    def bring_back(self):
+        ⟦d⟧.remove(⟦e⟧)
+
+    def __str__(self):
+        return ⟦f⟧
+`),
+    },
+    'fa23-4a': {
+      exam: 'fa23', number: '4(a)', title: 'A Perfect Question — fit', points: 7,
+      intro: '**Definition.** A *perfect square* is `k*k` for some integer `k`.\n\nImplement `fit`, which takes **positive** integers `total` and `n`. It returns `True` or `False` indicating whether there are `n` **positive** perfect squares that sum to `total`. The perfect squares need not be unique.',
+      code: code(`
+def fit(total, n):
+    """Return whether there are n positive perfect squares that sums to total.
+
+    >>> [fit(4, 1), fit(4, 2), fit(4, 3), fit(4, 4)]  # 1*(2*2) for n=1; 4*(1*1) for n=4
+    [True, False, False, True]
+    >>> [fit(12, n) for n in range(3, 8)]  # 3*(2*2), 3*(1*1)+3*3, 4*(1*1)+2*(2*2)
+    [True, True, False, True, False]
+    >>> [fit(32, 2), fit(32, 3), fit(32, 4), fit(32, 5)] # 2*(4*4), 3*(1*1)+2*2+5*5
+    [True, False, False, True]
+    """
+    def f(total, n, k):
+
+        if ⟦a⟧:
+            return True
+
+        elif ⟦b⟧:
+            return False
+        else:
+            return ⟦c⟧
+
+    return f(total, n, 1)
+`),
+    },
+    'fa23-4b': {
+      exam: 'fa23', number: '4(b)', title: 'A Perfect Question — squares', points: 9,
+      intro: '**Definition.** A *perfect square* is `k*k` for some integer `k`.\n\nImplement the generator function `squares`, which takes **positive** integers `total` and `k`. It yields all lists of perfect squares greater or equal to `k*k` that sum to `total`. Each list is in non-increasing order (large to small).',
+      code: code(`
+def squares(total, k):
+    """Yield the ways in which perfect squares greater or equal to k*k sum to total.
+
+    >>> list(squares(10, 1))  # All lists of perfect squares that sum to 10
+    [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [4, 1, 1, 1, 1, 1, 1], [4, 4, 1, 1], [9, 1]]
+    >>> list(squares(20, 2))  # Only use perfect squares greater or equal to 4 (2*2).
+    [[4, 4, 4, 4, 4], [16, 4]]
+    """
+    assert total > 0 and k > 0
+    if total == k * k:
+
+        yield ⟦d⟧
+    elif total > k * k:
+
+        for s in ⟦e⟧:
+
+            yield ⟦f⟧
+        yield from squares(total, k + 1)
+`),
+    },
+    'fa23-5': {
+      exam: 'fa23', number: '5', title: 'Only Paths', points: 7,
+      intro: 'Implement `only_paths`, which takes a Tree of numbers `t` and a number `n`. It returns a new Tree with only the nodes of `t` on a path from the root to a leaf with labels that sum to `n`, or `None` if no path sums to `n`. Do not mutate `t`.\n\nThe Tree class appears on the midterm 2 study guide. Here is an illustration of the doctest examples involving `t`.',
+      illustration: { src: 'assets/fa23-mt2-q5.png', width: 541, height: 80, alt: 'From the exam: three trees drawn as boxes. t: root 3 with branches 4 and 1; 1 has branches 3 (with branch 2), 2 (with branch 1), 5 and 3. only_paths(t, 7): root 3 with branches 4 and 1; 1 has branches 2 (with branch 1) and 3. only_paths(t, 9): root 3 with branch 1; 1 has branches 3 (with branch 2) and 5.' },
+      code: code(`
+def only_paths(t, n):
+    """Return a Tree with only the nodes of t along paths from the root to a leaf of t
+    for which the node labels of the path sum to n. If no paths sum to n, return None.
+
+    >>> print(only_paths(Tree(5, [Tree(2), Tree(1, [Tree(2)]), Tree(1, [Tree(1)])]), 7))
+    5
+      2
+      1
+        1
+    >>> t = Tree(3, [Tree(4), Tree(1, [Tree(3, [Tree(2)]), Tree(2, [Tree(1)]), Tree(5), Tree(3)])])
+    >>> print(only_paths(t, 7))
+    3
+      4
+      1
+        2
+          1
+        3
+    >>> print(only_paths(t, 9))
+    3
+      1
+        3
+          2
+        5
+    >>> print(only_paths(t, 3))
+    None
+    """
+    if ⟦a⟧:
+
+        return t
+
+    new_branches = [⟦b⟧ for b in t.branches]
+
+    if ⟦c⟧(new_branches):
+
+        return Tree(t.label, [b for b in new_branches if ⟦d⟧])
+`),
+    },
+    'fa23-5aplus': {
+      exam: 'fa23', number: '5(e)', title: 'Only Paths — A+ question', points: 0,
+      intro: '**This A+ question is not worth any points. It can only affect your course grade if you have a high A and might receive an A+. Finish the rest of the exam first!** Fill in the blank to implement `only_long_paths`, which takes a Tree of numbers `t` and a number `n`. It returns a new Tree containing only the nodes of `t` that lie on a path from the root to a leaf for which the sum of the labels **plus the length of the path** is `n`. Do not mutate `t`. You may not write `and`, `or`, `if`, `[` or `]`. Assume `only_paths` is implemented correctly.',
+      code: code(`
+only_paths = ⟦A+⟧
+
+def only_long_paths(t, n):
+    """Return a Tree with only the nodes of t along paths from the root to a leaf of t
+    for which the sum of node labels plus the length of the path is n.
+
+    >>> example = Tree(5, [Tree(3), Tree(1, [Tree(2)]), Tree(1, [Tree(1)])])
+    >>> only_long_paths(example, 10)  # Result has paths 5-3 (length 2) and 5-1-1 (length 3)
+    Tree(5, [Tree(3), Tree(1, [Tree(1)])])
+    """
+    return only_paths(t, n)
+`),
+    },
+    'fa23-6': {
+      exam: 'fa23', number: '6', title: 'After Party', points: 6,
+      intro: 'Implement `after`, which takes a linked list `s` and values `a` and `b`. It returns whether an element of `s` equal to `b` appears after an element of `s` equal to `a`. The `Link` class appears on the Midterm 2 study guide.',
+      code: code(`
+def after(s, a, b):
+    """Return whether b comes after a in linked list s.
+
+    >>> t = Link(3, Link(6, Link(5, Link(4))))
+    >>> after(t, 6, 4)
+    True
+    >>> after(t, 4, 6)
+    False
+    >>> after(t, 6, 6)
+    False
+    """
+    def find(s, n, f):
+
+        if s == Link.empty:
+
+            return ⟦a⟧
+
+        elif s.first == n:
+            return f(s.rest)
+        else:
+            return find(s.rest, n, f)
+
+    return find(s, a, lambda rest: ⟦b⟧)
+`),
+    },
+
+    // ───────────────────────────── Spring 2023 Midterm 2 ─────────────────────────────
+    'sp23-1': {
+      exam: 'sp23', number: '1', title: 'What Would Python Display?', points: 6,
+      intro: 'Assume the following code has been executed.',
+      code: code(`
+def chain(s):
+    return [s[0], s[1:]]
+
+silver = [2, chain([3, 4, 5])]
+gold = [silver[0], silver[1].pop()]
+silver[0] = 1
+platinum = chain(chain([6, 7, 8]))
+`),
+      outro: 'Write the output **displayed by the interactive Python interpreter** when each expression below is evaluated.\n\n*Hint*: Try drawing an environment diagram!\n\n*Reminder*: `s.pop()` removes and returns the last item in list `s`.',
+    },
+    'sp23-2a': {
+      exam: 'sp23', number: '2(a)', title: 'Letter Grade — Letter', points: 4,
+      intro: 'Implement the `Letter` class. A `Letter` has two instance attributes: `contents` (a `str`) and `sent` (a `bool`). Each `Letter` can only be sent once. The `send` method prints whether the letter was sent, and if it was, returns the reply, which is a new `Letter` instance with the same `contents`, but in all caps. *Hint*: `\'hi\'.upper()` evaluates to `\'HI\'`.',
+      code: code(`
+class Letter:
+    """A letter receives an all-caps reply when sent successfully.
+
+    >>> hi = Letter('Hello, World!')
+    >>> hi.send()
+    Hello, World! has been sent.
+    HELLO, WORLD!
+    >>> hi.send()
+    Hello, World! was already sent.
+    >>> Letter('Hey').send().send()
+    Hey has been sent.
+    HEY has been sent.
+    HEY
+    """
+    def __init__(self, contents):
+        self.contents = contents
+        ⟦a⟧
+    def send(self):
+        if self.sent:
+            print(self, 'was already sent.')
+        else:
+            print(self, 'has been sent.')
+            ⟦b⟧
+            return ⟦c⟧
+    def __repr__(self):
+        # Note: since no __str__ method is defined, the repr and str strings are the same.
+        return self.contents
+`),
+    },
+    'sp23-2b': {
+      exam: 'sp23', number: '2(b)', title: 'Letter Grade — Numbered', points: 6,
+      intro: 'Implement the `Numbered` class. A `Numbered` letter has a `number` attribute equal to how many numbered letters have previously been constructed. This number appears in its `repr` string. Assume `Letter` is implemented correctly.',
+      code: code(`
+class Numbered(Letter):
+    """A numbered letter has a different repr method that shows its number.
+
+    >>> hey = Numbered('Hello, World!')
+    >>> hey.send()
+    #0 has been sent.
+    HELLO, WORLD!
+    >>> Numbered('Hi!').send()
+    #1 has been sent.
+    HI!
+    >>> hey
+    #0
+    """
+    number = 0
+
+    def __init__(self, contents):
+        super().__init__(contents)
+        ⟦d⟧
+        ⟦e⟧
+
+    def __repr__(self):
+        return '#' + ⟦f⟧
+`),
+    },
+    'sp23-3a': {
+      exam: 'sp23', number: '3(a)', title: 'Prefixes — prefix', points: 3,
+      intro: '**Definition.** A *prefix sum* of a sequence of numbers is the sum of the first `n` elements for some positive length `n`.\n\nImplement `prefix`, which takes a list of numbers `s` and returns a list of the prefix sums of `s` in increasing order of the length of the prefix.',
+      code: code(`
+def prefix(s):
+    """Return a list of all prefix sums of list s.
+
+    >>> prefix([1, 2, 3, 0, 4, 5])
+    [1, 3, 6, 6, 10, 15]
+    >>> prefix([2, 2, 2, 0, -5, 5])
+    [2, 4, 6, 6, 1, 6]
+    """
+    return [⟦a⟧ for k in ⟦b⟧]
+`),
+    },
+    'sp23-3a-iii': {
+      exam: 'sp23', number: '3(a) iii', title: 'Prefixes — order of growth', points: 1,
+      intro: '**Definition.** A *prefix sum* of a sequence of numbers is the sum of the first `n` elements for some positive length `n`.',
+      code: code(`
+def prefix(s):
+    """Return a list of all prefix sums of list s."""
+    t = 0
+    result = []
+    for x in s:
+        t = t + x
+        result.append(t)
+    return result
+`),
+    },
+    'sp23-3b': {
+      exam: 'sp23', number: '3(b)', title: 'Prefixes — tens', points: 5,
+      intro: '**Definition.** A *prefix sum* of a sequence of numbers is the sum of the first `n` elements for some positive length `n`.\n\nImplement `tens`, which takes a **non-empty** linked list of numbers `s` represented as a `Link` instance. It prints all of the prefix sums of `s` that are multiples of 10 in increasing order of the length of the prefix.\n\nThe `Link` class appears on the midterm 2 study guide.',
+      code: code(`
+def tens(s):
+    """Print all prefix sums of Link s that are multiples of ten.
+
+    >>> tens(Link(3, Link(9, Link(8, Link(10, Link(0, Link(14, Link(6))))))))
+    20
+    30
+    30
+    50
+    """
+
+    def f(suffix, total):
+
+        if total % 10 == 0:
+
+            print(total)
+
+        if ⟦d⟧:
+
+            ⟦e⟧
+
+    ⟦f⟧
+`),
+    },
+    'sp23-4a': {
+      exam: 'sp23', number: '4(a)', title: 'Tree Trimming — exclude', points: 7,
+      intro: 'Implement `exclude`, which takes a `Tree` instance `t` and a value `x`. It returns a `Tree` containing the root node of `t` as well as each non-root node of `t` with a label not equal to `x`. The parent of a node in the result is its nearest ancestor node that is not excluded. The input `t` must not be modified.\n\nThe `Tree` class appears on the midterm 2 study guide.',
+      code: code(`
+def exclude(t, x):
+    """Return a Tree with the non-root nodes of t whose labels are not equal to x.
+
+    >>> t = Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4, [Tree(1)])])
+    >>> exclude(t, 2)
+    Tree(1, [Tree(3), Tree(4, [Tree(1)])])
+    >>> t               # t is not changed
+    Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4, [Tree(1)])])
+    >>> exclude(t, 1)  # The root node cannot be excluded
+    Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4)])
+    """
+
+    filtered_branches = map(lambda y: ⟦a⟧, t.branches)
+
+    bs = []
+
+    for b in filtered_branches:
+
+        if ⟦b⟧:
+
+            bs.⟦c⟧(⟦d⟧)
+
+        else:
+
+            bs.append(b)
+
+    return Tree(t.label, bs)
+`),
+    },
+    'sp23-4b': {
+      exam: 'sp23', number: '4(b)', title: 'Tree Trimming — remove', points: 3,
+      intro: 'Implement `remove`, which takes a `Tree` instance `t` and a value `x`. It removes all non-root nodes from `t` that have a label equal to `x`, then returns `t`. The parent of a node in `t` is its nearest ancestor that is not removed. Assume that `exclude` is implemented correctly.',
+      code: code(`
+def remove(t, x):
+    """Remove all non-root nodes labeled x from t and return t.
+
+    >>> t = Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4)])
+    >>> remove(t, 2)
+    Tree(1, [Tree(3), Tree(4)])
+    >>> remove(t, 3)  # t was changed, so both 2 and 3 are now removed.
+    Tree(1, [Tree(4)])
+    """
+
+    ⟦e⟧
+
+    return t
+`),
+    },
+    'sp23-5a': {
+      exam: 'sp23', number: '5(a)', title: 'Parking — count_park', points: 4,
+      intro: '**Definition.** When parking vehicles in a row, a *motorcycle* takes up 1 parking spot and a *car* takes up 2 adjacent parking spots. A string of length `n` can represent `n` adjacent parking spots using `%` for a motorcycle, `<>` for a car, and `.` for an empty spot. For example `\'.%%.<><>\'` represents an empty spot, then two spots containing motorcycles, then another empty spot, then four spots containing two cars.\n\nThanks to the Berkeley Math Circle for introducing this question.\n\nImplement `count_park`, which returns the number of ways that vehicles can be parked in `n` adjacent parking spots for positive integer `n`. Some or all spots can be empty.',
+      code: code(`
+def count_park(n):
+    """Count the ways to park cars and motorcycles in n adjacent spots.
+
+    >>> count_park(1)  # '.' or '%'
+    2
+    >>> count_park(2)  # '..', '.%', '%.', '%%', or '<>'
+    5
+    >>> count_park(4)  # some examples: '<><>', '.%%.', '%<>%', '%.<>'
+    29
+    """
+
+    if n < 0:
+
+        return 0
+
+    if n == 0:
+
+        return ⟦a⟧
+
+    return ⟦b⟧
+`),
+    },
+    'sp23-5b': {
+      exam: 'sp23', number: '5(b)', title: 'Parking — park', points: 6,
+      intro: '**Definition.** When parking vehicles in a row, a *motorcycle* takes up 1 parking spot and a *car* takes up 2 adjacent parking spots. A string of length `n` can represent `n` adjacent parking spots using `%` for a motorcycle, `<>` for a car, and `.` for an empty spot.\n\nImplement `park`, a generator function that takes a non-negative integer `n`. It yields (in any order) all possible strings representing `n` adjacent parking spots.',
+      // The exam has two one-line blanks, (c) and (d), answered together as one part; here they are one blank, (c, d).
+      code: code(`
+def park(n):
+    """Yield the ways to park cars and motorcycles in n adjacent spots.
+
+    >>> sorted(park(1))
+    ['%', '.']
+    >>> sorted(park(2))
+    ['%%', '%.', '.%', '..', '<>']
+    >>> sorted(park(3))
+    ['%%%', '%%.', '%.%', '%..', '%<>', '.%%', '.%.', '..%', '...', '.<>', '<>%', '<>.']
+    >>> len(list(park(4)))
+    29
+    """
+    if n == 0:
+        yield ''
+    elif n > 0:
+        for s in park(n-1):
+            ⟦c, d⟧
+        for s in ⟦e⟧:
+            ⟦f⟧
+`),
+    },
+    'sp23-5aplus': {
+      exam: 'sp23', number: '5(c)', title: 'Parking — A+ question', points: 0,
+      intro: '**This A+ question is not worth any points. It can only affect your course grade if you have a high A and might receive an A+. Finish the rest of the exam first!**\n\nImplement `pack`, a generator function that takes a non-negative integer `n`. It yields (in any order) all possible strings representing `n` adjacent parking spots in which an equal number of cars and motorcycles are parked, no motorcycle is adjacent to a car, and no empty spot is adjacent to another empty spot.',
+      code: code(`
+def pack(n):
+    """Yield the ways to park an equal number of cars and motorcycles
+    in n adjacent spots with no motorcycle adjacent to a car and no
+    empty spot adjacent to another empty spot.
+
+    >>> sorted(pack(4))
+    ['%.<>', '<>.%']
+    >>> sorted(pack(7))
+    ['%%.<><>', '<><>.%%']
+    >>> sorted(pack(8))
+    ['%%.<>.<>', '%%.<><>.', '%.%.<><>', '%.<><>.%', '.%%.<><>',
+     '.<><>.%%', '<>.%%.<>', '<>.<>.%%', '<><>.%%.', '<><>.%.%']
+    """
+    def f(n, k):
+        if n == 0 and k == 0:
+            yield ''
+        elif n > 0:
+            yield from g(n-1, k-1, '<', '%' )
+            yield from g(n-1, k,   '.', '.' )
+            yield from g(n-2, k+1, '%', '<>')
+
+    def g(n, k, no, yes):
+
+        yield from ⟦A+⟧
+
+    yield from f(n, 0)
+`),
+    },
   };
 
   // type: single_choice | multi_select | short_answer | code
@@ -1346,6 +1833,135 @@ def only_strips(t):
       choices: ['s', 't', 't + s', 't.label + s', '[t] + s', '[t.label] + s', '[t] + [s]', '[t.label] + [s]'] },
     { id: 'sp24-4aplus', problem: 'sp24-4aplus', label: 'v.', points: 0, topics: ['trees', 'recursion', 'lists'], difficulty: 'hard', blank: 'A+',
       type: 'code', prompt: 'Fill in the blank.' },
+    // Fall 2023 — Q1
+    { id: 'fa23-1a', problem: 'fa23-1', label: '(a)', points: 1, topics: ['iterators', 'lists'], difficulty: 'easy',
+      type: 'single_choice', mono: true, prompt: '`[-k for k in v if k in s]`', choices: ['[]', '[3, 4]', '[-3, -4]', 'Error'] },
+    { id: 'fa23-1b', problem: 'fa23-1', label: '(b)', points: 1, topics: ['iterators', 'hof'], difficulty: 'medium',
+      type: 'single_choice', mono: true, prompt: '`tuple(u)`',
+      choices: ['(3, 4, 5, 6)', '(3, 4, 5, 6, 7)', '(6, 8, 10, 12)', '(6, 8, 10, 12, 14)', '(10, 12)', '(10, 12, 14)', 'Error'] },
+    { id: 'fa23-1c', problem: 'fa23-1', label: '(c)', points: 1, topics: ['iterators'], difficulty: 'medium',
+      type: 'single_choice', mono: true, prompt: '`next(t)`', choices: ['3', '5', 'range(3, 7)', 'range(5, 7)', 'Error'] },
+    { id: 'fa23-1d', problem: 'fa23-1', label: '(d)', points: 1, topics: ['iterators'], difficulty: 'easy',
+      type: 'single_choice', mono: true, prompt: '`next(iter(s)) + next(iter(s))`', choices: ['6', '7', '10', '11', 'Error'] },
+    // Fall 2023 — Q2
+    { id: 'fa23-2a', problem: 'fa23-2', label: '(a)', points: 3, topics: ['env', 'lists'], difficulty: 'hard',
+      type: 'multi_select', prompt: 'What value fills blank (a)? Select **all** that apply.',
+      choices: ['None', 'A list', 'A number', 'The object bound to global s', 'The object bound to global t', 'The same object that s[0] would evaluate to in the global frame', 'The same object that s[1] would evaluate to in the global frame', 'The same object that t[0] would evaluate to in the global frame', 'The same object that t[1] would evaluate to in the global frame'] },
+    { id: 'fa23-2b', problem: 'fa23-2', label: '(b)', points: 3, topics: ['env', 'lists'], difficulty: 'hard',
+      type: 'short_answer', prompt: 'What would be printed by the expression `print(t)` at the end?' },
+    // Fall 2023 — Q3
+    { id: 'fa23-3a', problem: 'fa23-3', label: '(a)', points: 1, topics: ['oop'], difficulty: 'easy', blank: 'a',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (a).', choices: ['self', 'self.books', 'Library', 'Library()', 'Library(titles)'] },
+    { id: 'fa23-3b', problem: 'fa23-3', label: '(b)', points: 1, topics: ['oop', 'fundamentals'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa23-3c', problem: 'fa23-3', label: '(c)', points: 1, topics: ['oop', 'lists'], difficulty: 'easy', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (c).',
+      choices: ['out.append(book)', 'out.extend(book)', 'Library.append(book)', 'Library.extend(book)', 'self.out.append(book)', 'self.out.extend(book)'] },
+    { id: 'fa23-3d', problem: 'fa23-3', label: '(d)', points: 1, topics: ['oop'], difficulty: 'medium', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (d).', choices: ['self.', 'self.out', 'library', 'library.out', 'self.library.out'] },
+    { id: 'fa23-3e', problem: 'fa23-3', label: '(e)', points: 1, topics: ['oop'], difficulty: 'easy', blank: 'e',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (e).', choices: ['self', 'title', 'library', 'self.title', 'self.library'] },
+    { id: 'fa23-3f', problem: 'fa23-3', label: '(f)', points: 1, topics: ['oop'], difficulty: 'medium', blank: 'f',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (f).', choices: ['self', 'title', 'self.title', 'repr(self)', 'repr(title)', 'repr(self.title)'] },
+    // Fall 2023 — Q4
+    { id: 'fa23-4a', problem: 'fa23-4a', label: 'i.', points: 2, topics: ['recursion'], difficulty: 'hard', blank: 'a',
+      type: 'multi_select', mono: true, prompt: 'Select **all** of the options that could fill blank (a).',
+      choices: ['total == 0', 'n == k', 'total == 0 and n == 0', 'total == k * k', 'total == k * k and n == 1', 'total == n * k * k'] },
+    { id: 'fa23-4b', problem: 'fa23-4a', label: 'ii.', points: 2, topics: ['recursion'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa23-4c', problem: 'fa23-4a', label: 'iii.', points: 3, topics: ['recursion'], difficulty: 'hard', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c) with an expression of the form `f(___, ___, ___) ___ f(___, ___, ___)`.' },
+    { id: 'fa23-4d', problem: 'fa23-4b', label: 'i.', points: 2, topics: ['generators', 'lists'], difficulty: 'easy', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    { id: 'fa23-4e', problem: 'fa23-4b', label: 'ii.', points: 3, topics: ['generators', 'recursion'], difficulty: 'hard', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    { id: 'fa23-4f', problem: 'fa23-4b', label: 'iii.', points: 1, topics: ['generators', 'lists'], difficulty: 'medium', blank: 'f',
+      type: 'multi_select', mono: true, prompt: 'Select **all** of the options that could fill in blank (f).',
+      choices: ['s + k*k', 's.append(k*k)', 's + [k*k]', '[s] + [k*k]'] },
+    { id: 'fa23-4b-iv', problem: 'fa23-4b', label: 'iv.', points: 3, topics: ['generators', 'hof'], difficulty: 'hard',
+      type: 'short_answer', prompt: 'Write an expression containing `a` that evaluates to the **shortest** list of perfect squares that sum to an integer `a`. For example, if `a = 32`, your expression should evaluate to `[16, 16]` (not `[25, 4, 1, 1, 1]`). If there are two or more such lists that are both shortest, it can evaluate to any of them. Assume `squares` is implemented correctly.' },
+    // Fall 2023 — Q5
+    { id: 'fa23-5a', problem: 'fa23-5', label: '(a)', points: 2, topics: ['trees', 'recursion'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa23-5b', problem: 'fa23-5', label: '(b)', points: 3, topics: ['trees', 'recursion', 'lists'], difficulty: 'hard', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa23-5c', problem: 'fa23-5', label: '(c)', points: 1, topics: ['trees', 'hof'], difficulty: 'medium', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (c).', choices: ['all', 'any', 'has', 'only_paths'] },
+    { id: 'fa23-5d', problem: 'fa23-5', label: '(d)', points: 1, topics: ['trees', 'lists'], difficulty: 'easy', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (d).',
+      choices: ['only_paths(b, n)', 'b.label == n', 'b.label != n', 'b is None', 'b is not None'] },
+    { id: 'fa23-5aplus', problem: 'fa23-5aplus', label: '(e)', points: 0, topics: ['hof', 'trees', 'recursion'], difficulty: 'hard', blank: 'A+',
+      type: 'code', prompt: 'Fill in the blank.' },
+    // Fall 2023 — Q6
+    { id: 'fa23-6a', problem: 'fa23-6', label: '(a)', points: 1, topics: ['links', 'recursion'], difficulty: 'easy', blank: 'a',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (a).', choices: ['n', 'True', 'False', 'a < b', 'f(Link.empty)'] },
+    { id: 'fa23-6b', problem: 'fa23-6', label: '(b)', points: 4, topics: ['links', 'hof', 'recursion'], difficulty: 'hard', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b). **You may not use `or`, `and`, `if`, `[`, or `]`.**' },
+    { id: 'fa23-6c', problem: 'fa23-6', label: '(c)', points: 1, topics: ['efficiency'], difficulty: 'easy',
+      type: 'single_choice', prompt: 'What is the order of growth of the run time of an efficient implementation of `after` in terms of the length of `s`? Here, *efficient* means that you have filled in the blanks to give the function the fastest order of growth.',
+      choices: ['Constant', 'Logarithmic', 'Linear', 'Quadratic', 'Exponential'] },
+
+    // Spring 2023 — Q1
+    { id: 'sp23-1a', problem: 'sp23-1', label: '(a)', points: 2, topics: ['lists'], difficulty: 'medium',
+      type: 'short_answer', prompt: '`silver`' },
+    { id: 'sp23-1b', problem: 'sp23-1', label: '(b)', points: 2, topics: ['lists'], difficulty: 'medium',
+      type: 'short_answer', prompt: '`gold`' },
+    { id: 'sp23-1c', problem: 'sp23-1', label: '(c)', points: 2, topics: ['lists'], difficulty: 'hard',
+      type: 'short_answer', prompt: '`platinum`' },
+    // Spring 2023 — Q2
+    { id: 'sp23-2a', problem: 'sp23-2a', label: 'i.', points: 1, topics: ['oop'], difficulty: 'easy', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'sp23-2b', problem: 'sp23-2a', label: 'ii.', points: 1, topics: ['oop'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'sp23-2c', problem: 'sp23-2a', label: 'iii.', points: 2, topics: ['oop'], difficulty: 'medium', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'sp23-2d', problem: 'sp23-2b', label: 'i.', points: 2, topics: ['oop'], difficulty: 'medium', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (d).',
+      choices: ['Numbered.number = 0', 'Numbered.number = number', 'Numbered.number = self.number', 'self.number = 0', 'self.number = number', 'self.number = Numbered.number'] },
+    { id: 'sp23-2e', problem: 'sp23-2b', label: 'ii.', points: 2, topics: ['oop'], difficulty: 'medium', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    { id: 'sp23-2f', problem: 'sp23-2b', label: 'iii.', points: 2, topics: ['oop'], difficulty: 'medium', blank: 'f',
+      type: 'short_answer', prompt: 'Fill in blank (f).' },
+    // Spring 2023 — Q3
+    { id: 'sp23-3a', problem: 'sp23-3a', label: 'i.', points: 2, topics: ['lists'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'sp23-3b', problem: 'sp23-3a', label: 'ii.', points: 1, topics: ['lists'], difficulty: 'easy', blank: 'b',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (b).', choices: ['s', '[s]', 's[1:]', 'range(s)', 'range(len(s))'] },
+    { id: 'sp23-3a-iii', problem: 'sp23-3a-iii', label: 'iii.', points: 1, topics: ['efficiency'], difficulty: 'easy',
+      type: 'single_choice', prompt: 'What is the order of growth of the time to run this alternate implentation in terms of the length of `s`?\n\nAssume that the `append` method of a list takes just 1 step (constant time).',
+      choices: ['Constant', 'Logarithmic', 'Linear', 'Quadratic', 'Exponential'] },
+    { id: 'sp23-3d', problem: 'sp23-3b', label: 'i.', points: 1, topics: ['links'], difficulty: 'easy', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (d).',
+      choices: ['s is not Link.empty', 's.rest is not Link.empty', 's.rest.rest is not Link.empty', 'suffix is not Link.empty', 'suffix.rest is not Link.empty', 'suffix.rest.rest is not Link.empty'] },
+    { id: 'sp23-3e', problem: 'sp23-3b', label: 'ii.', points: 2, topics: ['links', 'recursion'], difficulty: 'medium', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    { id: 'sp23-3f', problem: 'sp23-3b', label: 'iii.', points: 2, topics: ['links', 'recursion'], difficulty: 'medium', blank: 'f',
+      type: 'short_answer', prompt: 'Fill in blank (f).' },
+    // Spring 2023 — Q4
+    { id: 'sp23-4a', problem: 'sp23-4a', label: 'i.', points: 2, topics: ['trees', 'recursion', 'hof'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'sp23-4b', problem: 'sp23-4a', label: 'ii.', points: 2, topics: ['trees'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'sp23-4c', problem: 'sp23-4a', label: 'iii.', points: 1, topics: ['trees', 'lists'], difficulty: 'easy', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (c).', choices: ['remove', 'pop', 'append', 'extend'] },
+    { id: 'sp23-4d', problem: 'sp23-4a', label: 'iv.', points: 2, topics: ['trees', 'lists'], difficulty: 'medium', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (d).',
+      choices: ['b', 'b.branches', 'exclude(b, x)', 'Tree(b.label, [exclude(y, x) for y in b.branches])'] },
+    { id: 'sp23-4e', problem: 'sp23-4b', label: 'i.', points: 3, topics: ['trees'], difficulty: 'hard', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    // Spring 2023 — Q5
+    { id: 'sp23-5a', problem: 'sp23-5a', label: 'i.', points: 1, topics: ['recursion'], difficulty: 'easy', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'sp23-5b', problem: 'sp23-5a', label: 'ii.', points: 3, topics: ['recursion'], difficulty: 'hard', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'sp23-5cd', problem: 'sp23-5b', label: 'i.', points: 3, topics: ['generators', 'recursion'], difficulty: 'medium', blank: 'c, d',
+      type: 'short_answer', prompt: 'Fill in blanks (c) and (d) with two lines of code. You may **not** use `yield from`.' },
+    { id: 'sp23-5e', problem: 'sp23-5b', label: 'ii.', points: 1, topics: ['generators', 'recursion'], difficulty: 'easy', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    { id: 'sp23-5f', problem: 'sp23-5b', label: 'iii.', points: 2, topics: ['generators'], difficulty: 'medium', blank: 'f',
+      type: 'short_answer', prompt: 'Fill in blank (f).' },
+    { id: 'sp23-5aplus', problem: 'sp23-5aplus', label: 'i.', points: 0, topics: ['generators', 'recursion'], difficulty: 'hard', blank: 'A+',
+      type: 'code', prompt: 'Fill in the blank.' },
   ];
 
   // correct: choice index (single), array of indices (multi)
@@ -1477,6 +2093,60 @@ def only_strips(t):
     'sp24-4e-c': { correct: 1 },
     'sp24-4e-d': { correct: 5 },
     'sp24-4aplus': { accepted: ['has_strip(b) and (only_strips(b) or t.label + 1 == b.label)'] },
+    'fa23-1a': { correct: 2, explanation: '`v` took the first two values from `t`, 3 and 4. Both are in `range(3, 7)`, so the comprehension negates them.' },
+    'fa23-1b': { correct: 4, explanation: '`map` is lazy and shares the iterator `t`. Building `v` already used 3 and 4, so the map doubles only what is left: 5 and 6.' },
+    'fa23-1c': { correct: 4, explanation: '`tuple(u)` used up the rest of `t`, so `next(t)` raises `StopIteration`.' },
+    'fa23-1d': { correct: 0, explanation: 'Each `iter(s)` makes a new iterator over the range, so each `next` returns its first element, 3.' },
+    'fa23-2a': { correct: [1, 3, 8], explanation: 'In `pull`, `s` is a copy of global `t` (which is `[6, s]`), and `u = s.pop()` is its last element: the list bound to global `s`, which is also what `t[1]` evaluates to.' },
+    'fa23-2b': { accepted: ['[6, [7, [8, 9, 8]]]'], explanation: '`pull()` returns `u[1][0]`, which is 8. In `push`, `s` is a copy of global `s`, but `s[1]` is still the shared inner list `[8, 9]`, so 8 is appended to it, and `t` shows the change through global `s`.' },
+    'fa23-3a': { correct: 0, explanation: 'Each book belongs to the library being constructed, which is `self`.' },
+    'fa23-3b': { accepted: ['self.books[title]', 'self.books.get(title)'] },
+    'fa23-3c': { correct: 4, explanation: 'Record the book as checked out. `append` adds one element; `extend` expects an iterable.' },
+    'fa23-3d': { correct: 4, explanation: 'A book reaches its library’s list of checked-out books through its `library` attribute.' },
+    'fa23-3e': { correct: 0, explanation: 'The book being brought back is `self`.' },
+    'fa23-3f': { correct: 2, explanation: '`print` uses `__str__`, and the expected output is the bare title. `repr` would add quotes.' },
+    'fa23-4a': { correct: [2, 4, 5], explanation: 'Each of these is true exactly when no more squares are needed or one more `k*k` (or `n` copies of it) finishes the sum. `total == n * k * k` stops soonest; the other two get there after more recursive calls.' },
+    'fa23-4b': { accepted: ['total < k * k', 'k * k > total'], explanation: 'Only squares of `k*k` or larger are left to use, so if `total` is smaller than `k*k` there is no way.' },
+    'fa23-4c': { accepted: ['f(total - k * k, n - 1, k) or f(total, n, k + 1)', 'f(total, n, k + 1) or f(total - k * k, n - 1, k)'], explanation: 'Either use `k*k` at least once (and possibly again), or move on to larger squares only.' },
+    'fa23-4d': { accepted: ['[k * k]', '[total]'] },
+    'fa23-4e': { accepted: ['squares(total - k * k, k)'], explanation: 'Every way to make `total - k*k` from squares of at least `k*k`, followed by one more `k*k`, is a way to make `total`, and stays in non-increasing order.' },
+    'fa23-4f': { correct: [2], explanation: '`s` is a list, so it can only be joined with another list. `append` would return `None`.' },
+    'fa23-4b-iv': { accepted: ['min(squares(a, 1), key=len)', 'min(list(squares(a, 1)), key=len)', 'min(squares(a, 1), key=lambda s: len(s))'], explanation: '`squares(a, 1)` yields every list of perfect squares summing to `a`; `min` with `key=len` picks a shortest one.' },
+    'fa23-5a': { accepted: ['t.is_leaf() and n == t.label', 't.is_leaf() and t.label == n', 'n == t.label and t.is_leaf()'], explanation: 'A leaf whose label is exactly the remaining sum is a whole path on its own.' },
+    'fa23-5b': { accepted: ['only_paths(b, n - t.label)'], explanation: 'Paths through `b` must make up whatever `t.label` leaves of `n`.' },
+    'fa23-5c': { correct: 1, explanation: 'If at least one branch kept a path (is not `None`), build a tree; otherwise the function ends and returns `None`.' },
+    'fa23-5d': { correct: 4 },
+    'fa23-5aplus': { accepted: ['(lambda f: lambda t, n: f(t, n-1))(only_paths)'] },
+    'fa23-6a': { correct: 2, explanation: 'Reaching the end of the list means `n` was never found.' },
+    'fa23-6b': { accepted: ['find(rest, b, lambda rest: True)', 'find(rest, b, lambda r: True)', 'find(rest, b, lambda x: True)'], explanation: 'After finding `a`, look for `b` in the rest of the list; finding it returns `True`.' },
+    'fa23-6c': { correct: 2, explanation: 'Each call moves one step down the list, so the work grows with its length. The official solution notes that Constant was also accepted (best case), but this site only marks Linear correct.' },
+
+    'sp23-1a': { accepted: ['[1, [3]]'], explanation: '`silver[1]` is `chain([3, 4, 5])`, which is `[3, [4, 5]]`. `pop` removes `[4, 5]`, and then `silver[0]` becomes 1.' },
+    'sp23-1b': { accepted: ['[2, [4, 5]]'], explanation: '`gold` was built before `silver[0]` changed, from 2 and the popped list `[4, 5]`.' },
+    'sp23-1c': { accepted: ['[6, [[7, 8]]]'], explanation: '`chain([6, 7, 8])` is `[6, [7, 8]]`. Chaining that gives its first element, 6, and a slice holding the rest: `[[7, 8]]`.' },
+    'sp23-2a': { accepted: ['self.sent = False'] },
+    'sp23-2b': { accepted: ['self.sent = True'] },
+    'sp23-2c': { accepted: ['Letter(self.contents.upper())'], explanation: 'The reply is a new plain `Letter` with the contents in capitals.' },
+    'sp23-2d': { correct: 5, explanation: 'The new letter’s number is how many numbered letters came before it, kept in the class attribute.' },
+    'sp23-2e': { accepted: ['Numbered.number += 1', 'Numbered.number = Numbered.number + 1'], explanation: 'Update the class attribute so the next numbered letter gets the next number. `self.number += 1` would only change this letter.' },
+    'sp23-2f': { accepted: ['str(self.number)', 'repr(self.number)'], explanation: '`number` is an int, so convert it to a string before adding it to `\'#\'`.' },
+    'sp23-3a': { accepted: ['sum(s[:k+1])', 'sum(s[0:k+1])'], explanation: 'The prefix of length `k + 1` is `s[:k+1]`.' },
+    'sp23-3b': { correct: 4 },
+    'sp23-3a-iii': { correct: 2, explanation: 'One pass over `s` with constant work per element.' },
+    'sp23-3d': { correct: 3, explanation: 'Keep going while there are elements left in the part of the list not yet added.' },
+    'sp23-3e': { accepted: ['f(suffix.rest, total + suffix.first)', 'f(suffix.rest, suffix.first + total)'] },
+    'sp23-3f': { accepted: ['f(s.rest, s.first)'], explanation: 'Start with the first prefix sum, `s.first`, and the rest of the list still to add.' },
+    'sp23-4a': { accepted: ['exclude(y, x)'] },
+    'sp23-4b': { accepted: ['b.label == x', 'x == b.label'] },
+    'sp23-4c': { correct: 3 },
+    'sp23-4d': { correct: 1, explanation: 'An excluded branch is dropped, and its (already filtered) branches take its place in `bs`.' },
+    'sp23-4e': { accepted: ['t.branches = exclude(t, x).branches'], explanation: '`exclude` builds a new tree, so copy its branches into `t` to change `t` itself.' },
+    'sp23-5a': { accepted: ['1'], explanation: 'There is exactly one way to fill zero spots: leave them as they are.' },
+    'sp23-5b': { accepted: ['2 * count_park(n-1) + count_park(n-2)', 'count_park(n-2) + 2 * count_park(n-1)', 'count_park(n-1) * 2 + count_park(n-2)', 'count_park(n-1) + count_park(n-1) + count_park(n-2)'], explanation: 'The last spot is empty or a motorcycle (two ways, each leaving `n-1` spots) or the last two spots are a car (leaving `n-2`).' },
+    'sp23-5cd': { accepted: ["yield s + '.'\nyield s + '%'", "yield s + '%'\nyield s + '.'"], explanation: 'Every arrangement of `n-1` spots can be followed by an empty spot or a motorcycle. The order does not matter because the strings may be yielded in any order.' },
+    'sp23-5e': { accepted: ['park(n-2)'] },
+    'sp23-5f': { accepted: ["yield s + '<>'"] },
+    'sp23-5aplus': { accepted: ['[yes + s for s in f(n, k) if not s or s[0] != no]', '(yes + s for s in f(n, k) if not s or s[0] != no)'] },
   };
 
   return { TOPICS, EXAMS, PROBLEMS, QUESTIONS, ANSWER_KEY, BUBBLE_NOTE };

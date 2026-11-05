@@ -4,7 +4,10 @@
 // verification record. Everything else still runs with Run Code, showing Console Output only: no pass/fail
 // summary is ever shown without a verified suite. Test eligibility is never inferred from topic or answer type.
 // Environment Diagram and What Would Python Display questions get no suites, and neither do problems where a wrong
-// multiple-choice option behaves exactly like the official answer (sp25 Q3(b), sp24 Q4(b)): tests could not tell them apart.
+// multiple-choice option behaves exactly like the official answer (sp25 Q3(b), sp24 Q4(b)) or where a select-all blank
+// has several correct options, so no single answer can fill it (fa23 Q4(a)): tests could not judge them.
+// Code that can't run on its own also has none, because Run Code runs the student's code alone first and only then
+// the tests: fa23 Q5(e) (`only_paths = …(only_paths)`) and sp23 Q2(b) (`class Numbered(Letter)`) need part (a).
 //
 // Shape (one entry per suite):
 //   {
@@ -134,6 +137,33 @@ def product(s):
         if b.label == t.label + 1 and has_strip(b):
             return True
     return False
+`;
+  // The course's Tree class with its __str__ method, which prints one label per line, indented two spaces per level.
+  const TREE_STR = TREE + `    def __str__(self):
+        def print_tree(t, indent=0):
+            tree_str = '  ' * indent + str(t.label) + "\\n"
+            for b in t.branches:
+                tree_str += print_tree(b, indent + 1)
+            return tree_str
+        return print_tree(self).rstrip()
+`;
+  const EXCLUDE = `def exclude(t, x):
+
+    filtered_branches = map(lambda y: exclude(y, x), t.branches)
+
+    bs = []
+
+    for b in filtered_branches:
+
+        if b.label == x:
+
+            bs.extend(b.branches)
+
+        else:
+
+            bs.append(b)
+
+    return Tree(t.label, bs)
 `;
   const LINK_NOTE = 'These tests provide the course’s Link class (the exam uses it but does not print it).';
   const TREE_NOTE = 'These tests provide the course’s Tree class (the exam uses it but does not print it).';
@@ -812,6 +842,265 @@ Tree(5, [Tree(6)])`),
 Tree(7)
 >>> test_only_strips(Tree(1, [Tree(2, [Tree(3)]), Tree(2, [Tree(4)])]))
 Tree(1, [Tree(2, [Tree(3)])])`),
+      ],
+    },
+
+    // ───────────────────────────── Fall 2023 Midterm 2 ─────────────────────────────
+    {
+      id: 'fa23-3-tests', problem: 'fa23-3', verified: true,
+      verification: verification({ passing: 3, failing: 26 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> cs = Library(['Composing Programs', 'Python Docs', 'Berkeley Academic Guide'])
+>>> bs = [cs.checkout('Composing Programs'), cs.checkout('Python Docs')]
+>>> cs.checkout('Composing Programs')
+Composing Programs is checked out
+>>> bs[0].bring_back()
+>>> cs.checkout('Composing Programs').title
+'Composing Programs'`),
+        added(`>>> lib = Library(['A', 'B'])
+>>> a = lib.checkout('A')
+>>> [a.title, a.library is lib, print(a)]
+A
+['A', True, None]
+>>> lib.checkout('A')
+A is checked out
+>>> lib.checkout('B').bring_back()
+>>> [b.title for b in lib.out]
+['A']`),
+      ],
+    },
+    {
+      id: 'fa23-4b-tests', problem: 'fa23-4b', verified: true,
+      verification: verification({ passing: 2, failing: 21 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> list(squares(10, 1))
+[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [4, 1, 1, 1, 1, 1, 1], [4, 4, 1, 1], [9, 1]]
+>>> list(squares(20, 2))
+[[4, 4, 4, 4, 4], [16, 4]]`),
+        added(`>>> sorted(squares(4, 1))
+[[1, 1, 1, 1], [4]]
+>>> list(squares(5, 2))
+[]
+>>> list(squares(13, 2))
+[[9, 4]]`),
+        added(`>>> sorted(squares(8, 1))
+[[1, 1, 1, 1, 1, 1, 1, 1], [4, 1, 1, 1, 1], [4, 4]]
+>>> list(squares(18, 3))
+[[9, 9]]`),
+      ],
+    },
+    {
+      id: 'fa23-5-tests', problem: 'fa23-5', verified: true,
+      verification: verification({ passing: 4, failing: 13 }),
+      provenance: EXAM, setup: TREE_STR, setupNote: 'These tests provide the course’s Tree class, including the __str__ method that print uses (the exam uses it but does not print it).', setupFrom: [],
+      cases: [
+        exam(`>>> print(only_paths(Tree(5, [Tree(2), Tree(1, [Tree(2)]), Tree(1, [Tree(1)])]), 7))
+5
+  2
+  1
+    1`),
+        exam(`>>> t = Tree(3, [Tree(4), Tree(1, [Tree(3, [Tree(2)]), Tree(2, [Tree(1)]), Tree(5), Tree(3)])])
+>>> print(only_paths(t, 7))
+3
+  4
+  1
+    2
+      1
+    3
+>>> print(only_paths(t, 9))
+3
+  1
+    3
+      2
+    5
+>>> print(only_paths(t, 3))
+None`),
+        added(`>>> only_paths(Tree(4), 4)
+Tree(4)
+>>> print(only_paths(Tree(4), 5))
+None
+>>> only_paths(Tree(1, [Tree(2), Tree(2)]), 3)
+Tree(1, [Tree(2), Tree(2)])`),
+        added(`>>> t = Tree(3, [Tree(4), Tree(1, [Tree(3, [Tree(2)]), Tree(2, [Tree(1)]), Tree(5), Tree(3)])])
+>>> print(only_paths(t, 10))
+None
+>>> t  # not mutated
+Tree(3, [Tree(4), Tree(1, [Tree(3, [Tree(2)]), Tree(2, [Tree(1)]), Tree(5), Tree(3)])])`),
+      ],
+    },
+    {
+      id: 'fa23-6-tests', problem: 'fa23-6', verified: true,
+      verification: verification({ passing: 3, failing: 9 }),
+      provenance: EXAM, setup: LINK, setupNote: LINK_NOTE, setupFrom: [],
+      cases: [
+        exam(`>>> t = Link(3, Link(6, Link(5, Link(4))))
+>>> after(t, 6, 4)
+True
+>>> after(t, 4, 6)
+False
+>>> after(t, 6, 6)
+False`),
+        added(`>>> [after(Link.empty, 1, 2), after(Link(1, Link(2)), 1, 2), after(Link(2, Link(1)), 1, 2)]
+[False, True, False]
+>>> [after(Link(1, Link(1)), 1, 1), after(Link(1, Link(3, Link(1, Link(2)))), 1, 2), after(Link(5), 5, 5)]
+[True, True, False]`),
+      ],
+    },
+
+    // ───────────────────────────── Spring 2023 Midterm 2 ─────────────────────────────
+    {
+      id: 'sp23-2a-tests', problem: 'sp23-2a', verified: true,
+      verification: verification({ passing: 2, failing: 7 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> hi = Letter('Hello, World!')
+>>> hi.send()
+Hello, World! has been sent.
+HELLO, WORLD!
+>>> hi.send()
+Hello, World! was already sent.`),
+        exam(`>>> Letter('Hey').send().send()
+Hey has been sent.
+HEY has been sent.
+HEY`),
+        added(`>>> a = Letter('ok')
+>>> [a.contents, a.sent]
+['ok', False]
+>>> b = a.send()
+ok has been sent.
+>>> [a.sent, b.sent, b.contents, type(b) is Letter]
+[True, False, 'OK', True]`),
+      ],
+    },
+    {
+      id: 'sp23-3a-tests', problem: 'sp23-3a', verified: true,
+      verification: verification({ passing: 3, failing: 8 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> prefix([1, 2, 3, 0, 4, 5])
+[1, 3, 6, 6, 10, 15]
+>>> prefix([2, 2, 2, 0, -5, 5])
+[2, 4, 6, 6, 1, 6]`),
+        added(`>>> prefix([])
+[]
+>>> prefix([5])
+[5]
+>>> prefix([-1, 1, -1])
+[-1, 0, -1]`),
+      ],
+    },
+    {
+      id: 'sp23-3b-tests', problem: 'sp23-3b', verified: true,
+      verification: verification({ passing: 2, failing: 11 }),
+      provenance: EXAM, setup: LINK, setupNote: LINK_NOTE, setupFrom: [],
+      cases: [
+        exam(`>>> tens(Link(3, Link(9, Link(8, Link(10, Link(0, Link(14, Link(6))))))))
+20
+30
+30
+50`),
+        added(`>>> tens(Link(10))
+10
+>>> tens(Link(5))
+>>> tens(Link(5, Link(5, Link(5, Link(5, Link(0))))))
+10
+20
+20
+>>> tens(Link(-10, Link(20)))
+-10
+10`),
+      ],
+    },
+    {
+      id: 'sp23-4a-tests', problem: 'sp23-4a', verified: true,
+      verification: verification({ passing: 2, failing: 12 }),
+      provenance: EXAM, setup: TREE, setupNote: TREE_NOTE, setupFrom: [],
+      cases: [
+        exam(`>>> t = Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4, [Tree(1)])])
+>>> exclude(t, 2)
+Tree(1, [Tree(3), Tree(4, [Tree(1)])])
+>>> t
+Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4, [Tree(1)])])
+>>> exclude(t, 1)
+Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4)])`),
+        added(`>>> exclude(Tree(2, [Tree(2, [Tree(2)])]), 2)
+Tree(2)
+>>> exclude(Tree(1, [Tree(5, [Tree(5, [Tree(6)]), Tree(7)])]), 5)
+Tree(1, [Tree(6), Tree(7)])
+>>> exclude(Tree(1, [Tree(2)]), 9)
+Tree(1, [Tree(2)])`),
+      ],
+    },
+    {
+      id: 'sp23-4b-tests', problem: 'sp23-4b', verified: true,
+      verification: verification({ passing: 2, failing: 4 }),
+      provenance: EXAM,
+      setup: TREE + '\n' + EXCLUDE, setupNote: 'These tests provide the course’s Tree class (the exam uses it but does not print it) and exclude from part (a) (the official solution).', setupFrom: ['sp23-4a'],
+      cases: [
+        exam(`>>> t = Tree(1, [Tree(2, [Tree(2), Tree(3)]), Tree(4)])
+>>> remove(t, 2)
+Tree(1, [Tree(3), Tree(4)])
+>>> remove(t, 3)
+Tree(1, [Tree(4)])`),
+        added(`>>> t = Tree(1, [Tree(5, [Tree(5, [Tree(6)]), Tree(7)])])
+>>> u = remove(t, 5)
+>>> [u is t, t]
+[True, Tree(1, [Tree(6), Tree(7)])]`),
+      ],
+    },
+    {
+      id: 'sp23-5a-tests', problem: 'sp23-5a', verified: true,
+      verification: verification({ passing: 4, failing: 5 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> count_park(1)
+2
+>>> count_park(2)
+5
+>>> count_park(4)
+29`),
+        added(`>>> [count_park(n) for n in range(0, 8)]
+[1, 2, 5, 12, 29, 70, 169, 408]`),
+      ],
+    },
+    {
+      id: 'sp23-5b-tests', problem: 'sp23-5b', verified: true,
+      verification: verification({ passing: 3, failing: 7 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> sorted(park(1))
+['%', '.']
+>>> sorted(park(2))
+['%%', '%.', '.%', '..', '<>']`),
+        exam(`>>> sorted(park(3))
+['%%%', '%%.', '%.%', '%..', '%<>', '.%%', '.%.', '..%', '...', '.<>', '<>%', '<>.']
+>>> len(list(park(4)))
+29`),
+        added(`>>> list(park(0))
+['']
+>>> [len(set(park(n))) for n in range(1, 8)]  # no duplicates
+[2, 5, 12, 29, 70, 169, 408]`),
+      ],
+    },
+    {
+      id: 'sp23-5aplus-tests', problem: 'sp23-5aplus', verified: true,
+      verification: verification({ passing: 2, failing: 3 }),
+      provenance: EXAM, setup: '', setupFrom: [],
+      cases: [
+        exam(`>>> sorted(pack(4))
+['%.<>', '<>.%']
+>>> sorted(pack(7))
+['%%.<><>', '<><>.%%']`),
+        exam(`>>> sorted(pack(8))
+['%%.<>.<>', '%%.<><>.', '%.%.<><>', '%.<><>.%', '.%%.<><>', '.<><>.%%', '<>.%%.<>', '<>.<>.%%', '<><>.%%.', '<><>.%.%']`),
+        added(`>>> [sorted(pack(0)), sorted(pack(1)), sorted(pack(3))]
+[[''], ['.'], []]
+>>> sorted(pack(5))
+['%.<>.', '.%.<>', '.<>.%', '<>.%.']
+>>> len(list(pack(9)))
+20`),
       ],
     },
   ];

@@ -24,8 +24,11 @@ const HARNESS = fs.readFileSync(path.join(ROOT, 'app', 'runner.js'), 'utf8').mat
 // Problems that must never get a suite: What Would Python Display, environment diagrams, an order-of-growth
 // question, and problems whose choices can't be judged by running code: sp25-3b (any one correct option of its
 // select-all blank runs fine) and sp24-4b (in that skeleton the loop always ends with t empty, so the wrong option
-// is_strip(s) behaves exactly like the official is_strip(s) and is_strip(t)).
-const EXCLUDED = ['fa25-1', 'sp25-1', 'fa25-2', 'sp25-2', 'sp25-2c', 'sp25-3b', 'fa24-1', 'fa24-2', 'sp24-1', 'sp24-2', 'sp24-4b'];
+// is_strip(s) behaves exactly like the official is_strip(s) and is_strip(t)), and fa23-4a, whose select-all blank (a) has
+// three correct options, so no single answer fills it. fa23-5aplus and sp23-2b can't run without part (a)'s definitions, and Run Code
+// runs the student's code alone before any tests.
+const EXCLUDED = ['fa25-1', 'sp25-1', 'fa25-2', 'sp25-2', 'sp25-2c', 'sp25-3b', 'fa24-1', 'fa24-2', 'sp24-1', 'sp24-2', 'sp24-4b',
+  'fa23-1', 'fa23-2', 'fa23-4a', 'fa23-5aplus', 'sp23-1', 'sp23-2b', 'sp23-3a-iii'];
 
 let problems = 0;
 const fail = (m) => { console.log(`FAIL  ${m}`); problems++; };

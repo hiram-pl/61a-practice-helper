@@ -1557,7 +1557,7 @@
       <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a><span class="feedback-note">Your feedback can make this platform better!</span></div>
       <div class="notice">No account needed. Your answers, code notes and annotations are saved in <b>this browser on this device</b> and are gone if you clear site data.</div>
       <p class="disclaimer">Privacy: this site uses Cloudflare Web Analytics, which collects aggregate traffic statistics (such as visits and page views) without cookies. Your answers, code, grades and exam history stay in your browser’s localStorage and are never sent anywhere, unless you choose Python Tutor on a question, which opens pythontutor.com with that question’s code.</p>
-      <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024 and Spring 2024) and credited on each question. Explanations were written for this prototype and are not official.</p>
+      <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023 and Spring 2023) and credited on each question. Explanations were written for this prototype and are not official.</p>
     </main>`;
   }
 
@@ -1711,6 +1711,7 @@
 
   // These problems showed their figure here before it moved to the diagram workspace. Saved pen strokes are anchored
   // to a block's index, so an empty block keeps the strokes on the blocks below it in place.
+  // A problem's `illustration` (an exam image that is not a diagram to fill in) is shown in that same spot.
   const FIGURE_SLOT = new Set(['fa24-2', 'sp24-2']);
   function renderLeft(g) {
     const pr = PROBLEMS[g.pid];
@@ -1733,7 +1734,7 @@
         <div class="src"><span>Source: <a href="${esc(ex.url)}" target="_blank" rel="noopener">${esc(ex.label)}</a>, Q${esc(pr.number)}</span>${topics}</div>
         <h2>${esc(pr.number)}. <span class="pts">(${pr.points.toFixed(1)} points)</span>${esc(pr.title)}</h2>
         <div class="annot-text" data-annot="intro"></div>
-        ${FIGURE_SLOT.has(g.pid) ? '<div hidden></div>' : ''}
+        ${FIGURE_SLOT.has(g.pid) ? '<div hidden></div>' : pr.illustration ? `<figure class="exam-figure"><img src="${esc(pr.illustration.src)}" width="${esc(pr.illustration.width)}" height="${esc(pr.illustration.height)}" alt="${esc(pr.illustration.alt)}" draggable="false"><figcaption>Illustration from the exam PDF</figcaption></figure>` : ''}
         <div class="editor">
           <div class="editor-head">
             <span class="editor-file">${esc(fileName(g.pid))}</span>
