@@ -72,7 +72,7 @@ ok(['fa24-1', 'fa24-2', 'sp24-1', 'sp24-2'].every((pid) => !SUITES.some((t) => t
   await page.evaluate(() => { Storage.prototype.setItem = Object.getPrototypeOf(localStorage).setItem; });
   await click('[data-action="enter"]');
   let S = await st();
-  ok(JSON.stringify(S.prefs.exams) === JSON.stringify(['fa25', 'sp25', 'fa24', 'sp24']), `saved "both midterms" filter now includes the 2024 exams (${S.prefs.exams})`);
+  ok(JSON.stringify(S.prefs.exams) === JSON.stringify(Object.keys(B.EXAMS)), `saved "both midterms" filter now includes every newer exam (${S.prefs.exams})`);
   await seed({ prefs: { ...prefs, exams: ['fa25'] } });
   await click('[data-action="enter"]');
   S = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);

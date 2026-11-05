@@ -24,9 +24,10 @@ to test a served copy. `npm run test:guides` needs `python3`.
 | `tour` | First-visit tour: welcome prompt, one-time tips across Practice / exam / review, dimming and blocking the page behind a tip, the countdown waiting for tips, End tour, No thanks, Replay, phone width (other suites start with the tour declined) |
 | `phase5a_qa` | damaged saved data, grading audit, Go to Home, two open tabs, Phase 6 readiness |
 | `phase6a_runner` | Run Code: output, errors, timeout + recovery, isolation, stale results, review safety (needs internet for Pyodide) |
-| `phase6c_test_bank` | The 28 shipped suites in Pyodide (official passes, a wrong answer is caught); real Practice/Exam/Review flow |
+| `phase6c_test_bank` | The 40 shipped suites in Pyodide (official passes, a wrong answer is caught); real Practice/Exam/Review flow |
 | `phase6b_tests` | Verified tests (fixture suites, test-only): Passed X/Y, per-case details, not-run cases, case timeout, isolation, unverified suites ignored, exam/review safety |
 | `phase8_2024_exams` | Fall 2024 / Spring 2024 Midterm 2: structure and points vs the PDFs, full exams in order, official answers score 45/45 and 50/50, A+ staff-graded, history unchanged, topic practice, diagram image, saved-filter migration, Run Code suite |
+| `phase9_2023_exams` | Fall 2023 / Spring 2023 Midterm 2: structure and points vs the PDFs, full exams in order, official answers score 45/45, A+ staff-graded, history unchanged, diagram workspace (8 blanks, saved into the attempt), tree illustration, topic practice, saved-filter migration, Run Code suite with the Tree `__str__` setup |
 | `diagram_workspace` | Environment diagram workspace (pen, typing in blanks, lists, magnetic arrows, undo/redo, saving, exam to review) |
 | `study_guides_doctest` | every study-guide example runs and prints what it shows |
 | `verify_test_bank` | every verified suite passes with the official solution and all accepted answers, and fails for every wrong choice and listed wrong answer (local Python, same harness as the browser) |
