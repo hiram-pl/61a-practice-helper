@@ -12,4 +12,9 @@ const DEFAULT_CHROME = {
 module.exports = {
   APP_URL: process.env.APP_URL || pathToFileURL(path.join(__dirname, '..', '..', 'app', 'index.html')).href,
   CHROME: process.env.CHROME || DEFAULT_CHROME,
+  // The first-visit tour (app/tour.js) would cover the page and hold timers, so other suites start with it
+  // declined, on every load (including after a test clears localStorage). tour.test.js covers the tour itself.
+  skipTour: (page) => page.evaluateOnNewDocument(() => {
+    try { if (!localStorage.getItem('cs61a-practice:tour')) localStorage.setItem('cs61a-practice:tour', '{"asked":true,"on":false,"seen":{}}'); } catch (e) { /* no storage */ }
+  }),
 };

@@ -9,6 +9,7 @@
 
   const { TOPICS, EXAMS, PROBLEMS, QUESTIONS, ANSWER_KEY, BUBBLE_NOTE } = window.CS61A_BANK;
   const GUIDES = window.CS61A_GUIDES || {}; // topic id -> study-guide concepts (data/study_guides.js)
+  const TOUR = window.CS61A_TOUR || null;   // first-visit tour and one-time tips (tour.js)
   const QMAP = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
   const ORDER = Object.fromEntries(QUESTIONS.map((q, i) => [q.id, i]));
   const STORE_KEY = 'cs61a-practice:v1';
@@ -755,7 +756,7 @@
     pen: 'Draw with the mouse or trackpad.',
     eraser: 'Click or drag over a mark to erase it.',
     list: 'Click where the list should go.',
-    arrow: 'Drag from a value or list cell to its target. Ends snap into place.',
+    arrow: 'Click a value or list cell, then click its target (or drag between them). Ends snap into place. Esc cancels.',
   };
   const dgHistory = new WeakMap(); // diagram list -> { undo: [snapshots], redo: [snapshots] }
   const dgGeom = new Map();        // arrow -> { pts, d } from the last layout, for drawing and hit tests
@@ -956,6 +957,7 @@
     document.getElementById('dg-hint').textContent = DG_HINTS[dg.mode];
   }
   function setDgMode(mode) {
+    dgCancelArrow();
     dg.mode = dg.mode === mode ? 'select' : mode;
     dg.selected = null;
     dg.canvas.dataset.mode = dg.mode;
@@ -1025,9 +1027,33 @@
     updateDgToolbar();
   }
 
+  // An arrow started with a click (not a drag) follows the pointer until the next click, which places its end.
+  function dgCancelArrow() {
+    if (!dg.drag || !dg.drag.following) return false;
+    dg.drag = null;
+    dgShowSnap(null);
+    drawInk();
+    return true;
+  }
   function onDgDown(e) {
     const active = document.activeElement;
-    if (e.button !== 0 || e.target === active) return; // inside the box being edited: normal text editing
+    if (e.button !== 0) return;
+    const d = dg.drag;
+    if (d && d.following && !e.target.closest('[data-dgl]')) { // a list's + and − still work while the end follows
+      e.preventDefault();
+      const p = dgPoint(e);
+      dg.drag = null;
+      dgShowSnap(null);
+      if (Math.hypot(p[0] - d.start[0], p[1] - d.start[1]) >= 8) {
+        dgSetArrowEnd(d.item, 'to', p);
+        dgShowSnap(null);
+        dg.list.push(d.item);
+        dgRecord(d.before);
+      }
+      drawInk();
+      return;
+    }
+    if (e.target === active) return; // inside the box being edited: normal text editing
     const wasEditing = dgIsEditing(active);
     if (wasEditing) active.blur();
     if (e.target.closest('[data-dgl]')) return; // list + and −: handled on click
@@ -1108,7 +1134,8 @@
   }
   function onDgUp() {
     const d = dg.drag;
-    if (!d) return;
+    if (!d || d.following) return;
+    if (d.kind === 'arrow' && !d.moved) { d.following = true; return; } // clicked, not dragged: the end follows the pointer
     dg.drag = null;
     dgShowSnap(null);
     if (d.kind === 'pen') dg.list.push({ id: newId(), kind: 'pen', pts: d.pts });
@@ -1223,6 +1250,7 @@
     const b = e.target.closest('[data-dg]');
     if (!b || b.disabled) return;
     const k = b.dataset.dg;
+    dgCancelArrow();
     dgBlur();
     if (DG_HINTS[k]) setDgMode(k);
     else if (k === 'undo') dgRestore(dgHist().undo, dgHist().redo);
@@ -1255,6 +1283,19 @@
   }
   function pauseTimer(t) {
     if (t && t.runningSince) { t.remainingMs = timeLeft(t); t.runningSince = null; }
+  }
+  // While a tour tip (tour.js) is up on a question screen, a running countdown waits, so the tips come before the clock.
+  function holdTimer(on) {
+    const s = ui.screen === 'practice' && cur();
+    const t = s && !isReview(s) && s.timer;
+    if (!t) return;
+    if (on && t.runningSince) { pauseTimer(t); t.pausedByTour = true; save(); }
+    if (!on && t.pausedByTour) {
+      delete t.pausedByTour;
+      if (!t.runningSince && t.remainingMs > 0) t.runningSince = Date.now();
+      save();
+      render();
+    }
   }
   function tick() {
     // An exam whose time ran out is submitted, whichever screen is showing (also catches up after sleep/background).
@@ -1530,7 +1571,7 @@
     const mode = p.mode === 'exam' ? 'exam' : 'practice';
     const modeBtn = (m, title, sub) => `<button class="mode-opt" id="mode-${m}" data-action="mode" data-v="${m}" aria-pressed="${mode === m}"><b>${title}</b><span>${sub}</span></button>`;
     return `<main class="home">
-      <div class="home-head"><div><button class="home-brand" data-action="landing" title="Back to the welcome page"><h1>CS 61A &amp; C88C Exam Practice</h1></button><p class="tagline">Past-exam questions, one at a time. Pick topics, set a timer, check your work.</p></div></div>
+      <div class="home-head"><div><button class="home-brand" data-action="landing" title="Back to the welcome page"><h1>CS 61A &amp; C88C Exam Practice</h1></button><p class="tagline">Past-exam questions, one at a time. Pick topics, set a timer, check your work.</p></div>${TOUR ? `<button class="btn btn-sm btn-home btn-feedback" data-action="replay-tour">${icon('tour')}Replay the tutorial</button>` : ''}</div>
       ${examResumeHTML()}
       ${resume}
 
@@ -1705,6 +1746,7 @@
     del: '<path d="M6 6l12 12M18 6L6 18" />',
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
     msg: '<path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />',
+    tour: '<circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" />',
   };
   const FEEDBACK_URL = 'https://forms.gle/VqhUJDZj1UNJq3gRA'; // Google Form, opened in a new tab; nothing is collected here
   const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
@@ -2158,6 +2200,26 @@
     </div>`;
   }
 
+  // Toolbar icons with their names and what they do, for the tour (tour.js).
+  const ANN_TOOLS = [
+    ['hl', 'Highlighter', 'Select text or code to highlight what matters.'],
+    ['pen', 'Red pen', 'Draw or write on the problem.'],
+    ['eraser', 'Eraser', 'Click or drag over a mark to remove it.'],
+    ['undo', 'Undo', 'Take back your last change.'],
+    ['redo', 'Redo', 'Bring back what you undid.'],
+    ['clear', 'Clear', 'Remove every mark on this question.'],
+  ];
+  const DG_TOOLS = [
+    ['select', 'Type & move', 'Click anywhere to add a value and type it. Drag things to move them.'],
+    ['pen', 'Red pen', 'Draw on the diagram.'],
+    ['eraser', 'Eraser', 'Click or drag over a mark to remove it.'],
+    ['list', 'New list', 'Click where a list should go. + and − add or remove cells.'],
+    ['arrow', 'Arrow', 'Click a value or cell, then click what it points to.'],
+    ['undo', 'Undo / Redo', 'Take back a change, or bring it back.'],
+    ['del', 'Delete selected', 'Remove the value, list or arrow you selected.'],
+    ['clear', 'Clear', 'Remove everything you added to this diagram.'],
+  ];
+  const toolKey = (tools) => `<ul class="tool-key">${tools.map(([k, name, use]) => `<li><span class="tool-key-icon">${icon(k)}</span><span><b>${name}</b>: ${use}</span></li>`).join('')}</ul>`;
   function headerHTML(s) {
     const t = s.timer;
     const exam = isExam(s);
@@ -2211,7 +2273,7 @@
       ${ui.navOpen ? renderNavigator(s, !exam) : ''}`;
   }
   function renderPracticeShell(s) {
-    return `<div class="practice">
+    return `<div class="practice" data-view="${ui.view}">
       <header class="p-header" id="p-header">${headerHTML(s)}</header>
       <div class="rule" aria-hidden="true"></div>
       <div id="p-banner">${bannerHTML(s)}</div>
@@ -2472,6 +2534,7 @@
         if (sel && el.setSelectionRange) el.setSelectionRange(sel[0], sel[1]);
       }
     }
+    if (TOUR) TOUR.update();
   }
 
   function go(i) {
@@ -2533,6 +2596,7 @@
     switch (a) {
       // landing & home
       case 'enter': ui.screen = 'home'; window.scrollTo(0, 0); break;
+      case 'replay-tour': if (TOUR) TOUR.replay(); return;
       case 'landing': ui.screen = 'landing'; ui.menu = null; break;
       case 'menu': ui.menu = ui.menu === btn.dataset.id ? null : btn.dataset.id; break;
       case 'topics-all': p.topics = TOPICS.filter((t) => QUESTIONS.some((x) => x.topics.includes(t.id))).map((t) => t.id); break;
@@ -2816,6 +2880,7 @@
         return;
       }
       if (ui.annMode !== 'none') { setAnnMode(ui.annMode); return; }
+      if (dg.pid && dgCancelArrow()) return;
       if (dg.pid && dg.mode !== 'select') { setDgMode('select'); return; }
     }
     if (ui.screen !== 'practice' || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2875,6 +2940,15 @@
     const t = store.exam.timer;
     if (t && t.runningSince && timeLeft(t) <= 0) submitExam(true);
     else if (!store.exam.leftAt) { setView('exam'); ui.screen = 'practice'; }
+  }
+  if (TOUR) {
+    TOUR.init({
+      hold: holdTimer,
+      directions(open) { if (ui.dirOpen !== open) { ui.dirOpen = open; ui.navOpen = false; render(); } },
+      annTools: () => toolKey(ANN_TOOLS),
+      dgTools: () => toolKey(DG_TOOLS),
+      icon,
+    });
   }
   render();
 })();

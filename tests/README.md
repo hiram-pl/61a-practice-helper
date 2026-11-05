@@ -21,6 +21,7 @@ to test a served copy. `npm run test:guides` needs `python3`.
 | `phase3_exam_mode` | exam setup, timer, Save & Leave, submission, results |
 | `phase4_results_review` | auto-graded score, learning insights, editable review isolation |
 | `session_isolation` | annotations / code / answers scoped to each practice set |
+| `tour` | First-visit tour: welcome prompt, one-time tips across Practice / exam / review, dimming and blocking the page behind a tip, the countdown waiting for tips, End tour, No thanks, Replay, phone width (other suites start with the tour declined) |
 | `phase5a_qa` | damaged saved data, grading audit, Go to Home, two open tabs, Phase 6 readiness |
 | `phase6a_runner` | Run Code: output, errors, timeout + recovery, isolation, stale results, review safety (needs internet for Pyodide) |
 | `phase6c_test_bank` | The 28 shipped suites in Pyodide (official passes, a wrong answer is caught); real Practice/Exam/Review flow |

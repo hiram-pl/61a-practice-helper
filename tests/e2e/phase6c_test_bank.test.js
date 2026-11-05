@@ -4,7 +4,7 @@
 // Needs internet access the first time (Pyodide is loaded from the jsDelivr CDN).
 const puppeteer = require('puppeteer-core');
 const path = require('path');
-const { APP_URL, CHROME } = require('./config');
+const { APP_URL, CHROME, skipTour } = require('./config');
 const VARIANTS = require('../test_bank/variants.js');
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
@@ -35,6 +35,7 @@ const officialAnswers = (pids) => Object.fromEntries(pids.flatMap((pid) => parts
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
+  await skipTour(page);
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
