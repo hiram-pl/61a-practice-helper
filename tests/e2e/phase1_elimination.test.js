@@ -26,7 +26,7 @@ const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if
   const pick = (qid, i) => page.click(`label[for="c-${qid}-${i}"]`);
 
   await page.goto(URL);
-  await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ prefs: { topics: [], exams: ['fa25mt2', 'sp25mt2'], difficulties: ['easy', 'medium', 'hard'], types: ['single_choice', 'multi_select'], size: 'all', timerOn: true, minutes: 25 } })), KEY);
+  await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ prefs: { topics: [], exams: ['fa25mt2', 'sp25mt2'], difficulties: ['easy', 'medium', 'hard'], size: 999, timerOn: true, minutes: 25 } })), KEY);
   // exam ids may differ; fall back to whatever the bank has
   await page.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.prefs.exams = Object.keys(window.CS61A_BANK.EXAMS); localStorage.setItem(k, JSON.stringify(s)); Storage.prototype.setItem = function () {}; }, KEY);
   await page.reload();

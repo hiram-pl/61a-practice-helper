@@ -113,17 +113,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   function QTYPE() { return null; }
   // Answer all parts of the multi-part group -> answered; then mark it -> answered + marked
   await page.click('#nav-toggle');
+  const spaced = []; // parts given a whitespace-only answer (the first part already holds a real one)
   for (const id of mg.ids) {
     const type = await page.evaluate((id) => window.CS61A_BANK.QUESTIONS.find((q) => q.id === id).type, id);
     const has = (await sess()).answers[id];
     if (has !== undefined && has !== '' && !(Array.isArray(has) && !has.length)) continue;
     if (type === 'single_choice' || type === 'multi_select') await page.click(`label[for="c-${id}-0"]`);
-    else { await page.focus(`#ta-${id}`); await page.keyboard.type('   '); }
+    else { await page.focus(`#ta-${id}`); await page.keyboard.type('   '); spaced.push(id); }
   }
   await page.click('#nav-toggle');
   t = await tiles();
-  const anyText = await page.evaluate((ids) => ids.some((id) => ['short_answer', 'code'].includes(window.CS61A_BANK.QUESTIONS.find((q) => q.id === id).type)), mg.ids);
-  if (anyText) ok(t[multiIdx].cls.includes('partial'), 'whitespace-only text answers do not count as answered');
+  if (spaced.length) ok(t[multiIdx].cls.includes('partial'), 'whitespace-only text answers do not count as answered');
   await page.click('#nav-toggle');
   for (const id of mg.ids) {
     if (await page.$(`#ta-${id}`)) { await page.focus(`#ta-${id}`); await page.keyboard.type('ans'); }

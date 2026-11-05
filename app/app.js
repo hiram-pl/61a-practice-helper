@@ -12,21 +12,14 @@
   const QMAP = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
   const ORDER = Object.fromEntries(QUESTIONS.map((q, i) => [q.id, i]));
   const STORE_KEY = 'cs61a-practice:v1';
-  const SIZES = [5, 10, 20, 'all'];
   const DIFFS = ['easy', 'medium', 'hard'];
-  const TYPES = [
-    { id: 'single_choice', name: 'Multiple choice' },
-    { id: 'multi_select', name: 'Select all' },
-    { id: 'short_answer', name: 'Short answer' },
-    { id: 'code', name: 'Code' },
-  ];
   const TYPE_LABEL = { single_choice: 'Multiple choice', multi_select: 'Select all that apply', short_answer: 'Short answer', code: 'Code response · self-check' };
 
   const app = document.getElementById('app');
   const live = document.getElementById('sr-live');
 
   // ───────────────────────────── State & persistence ─────────────────────────────
-  const DEFAULT_PREFS = { mode: 'practice', topics: [], exams: Object.keys(EXAMS), difficulties: DIFFS.slice(), types: TYPES.map((t) => t.id), size: 10, timerOn: true, minutes: 25 };
+  const DEFAULT_PREFS = { mode: 'practice', topics: [], exams: Object.keys(EXAMS), difficulties: DIFFS.slice(), size: 5, timerOn: true, minutes: 25 };
   // Neither exam PDF states a time limit, so exams start from this editable default (labeled as such in the UI).
   const EXAM_DEFAULT_MINUTES = 120;
   const EXAM_MAX_MINUTES = 300;
@@ -119,7 +112,7 @@
   const store = {
     version: STORE_VERSION, // same storage key as v1, so practice sessions saved before exams existed still load
     prefs: cleanPrefs(Object.assign({}, DEFAULT_PREFS, isObj(saved && saved.prefs) ? saved.prefs : {}), DEFAULT_PREFS,
-      { topics: TOPICS.map((t) => t.id), exams: Object.keys(EXAMS), difficulties: DIFFS, types: TYPES.map((t) => t.id) }),
+      { topics: TOPICS.map((t) => t.id), exams: Object.keys(EXAMS), difficulties: DIFFS }),
     session: migrateSession(saved && saved.session), // the practice set; carries its own notes/annotations (see below)
     examPrefs: cleanPrefs(Object.assign({}, DEFAULT_EXAM_PREFS, isObj(saved && saved.examPrefs) ? saved.examPrefs : {}), DEFAULT_EXAM_PREFS,
       { topics: TOPICS.map((t) => t.id), picked: Object.keys(PROBLEMS) }),
@@ -153,12 +146,16 @@
   }
   store.prefs.examsKnown = Object.keys(EXAMS);
   if (!EXAMS[store.examPrefs.examId]) store.examPrefs.examId = DEFAULT_EXAM_PREFS.examId;
-  if (!SIZES.includes(store.prefs.size)) store.prefs.size = DEFAULT_PREFS.size;
+  // Set size is any whole number of question groups (up to how many match; see sizeMax). Older saves could hold
+  // 'all' from the former dropdown, which now starts again from the default. The former Question Types filter is gone,
+  // so a saved selection of types is dropped and never narrows a new set.
+  if (!(Number.isInteger(store.prefs.size) && store.prefs.size >= 1)) store.prefs.size = DEFAULT_PREFS.size;
+  delete store.prefs.types;
   if (!['practice', 'exam'].includes(store.prefs.mode)) store.prefs.mode = 'practice';
   if (!['full', 'custom'].includes(store.examPrefs.kind)) store.examPrefs.kind = 'full';
   store.examPrefs.picked = [...new Set(store.examPrefs.picked)].filter((pid) => PROBLEMS[pid]);
   // view: which session the question screen shows. 'practice' | 'exam' (in progress) | 'review' (a submitted attempt)
-  const ui = { screen: 'landing', view: 'practice', attemptId: null, menu: null, navOpen: false, dirOpen: false, hideClock: false, confirmReveal: null, annMode: 'none', examQuery: '' };
+  const ui = { screen: 'landing', view: 'practice', attemptId: null, menu: null, navOpen: false, dirOpen: false, hideClock: false, confirmReveal: null, annMode: 'none', examQuery: '', sizeDraft: null };
 
   const attemptById = (id) => store.attempts.find((a) => a.id === id) || null;
   function cur() {
@@ -1298,7 +1295,6 @@
     return QUESTIONS.filter((q) =>
       prefs.exams.includes(PROBLEMS[q.problem].exam) &&
       prefs.difficulties.includes(q.difficulty) &&
-      prefs.types.includes(q.type) &&
       (ignoreTopics || prefs.topics.length === 0 || q.topics.some((t) => prefs.topics.includes(t))));
   }
   const problemsOf = (qs) => [...new Set(qs.map((q) => q.problem))];
@@ -1317,14 +1313,30 @@
     save();
     render();
   }
-  // A problem is picked if any of its parts matches the filters; then all of its parts of the
-  // chosen question types come along, so multi-part questions always stay together.
+  // Set size: how many question groups match the filters (the most a set can have), and the size actually used.
+  const sizeMax = () => problemsOf(filtered(store.prefs)).length;
+  const setSize = () => Math.min(store.prefs.size, sizeMax());
+  // A typed set size: a whole number from 1 to the matching count, or null while it isn't one yet.
+  function parseSize(text) {
+    const v = Number(String(text).trim());
+    return String(text).trim() !== '' && Number.isInteger(v) && v >= 1 && v <= sizeMax() ? v : null;
+  }
+  // On blur or before starting: round a decimal, clamp into range, or keep the last valid size if it isn't a number.
+  function commitSize(text) {
+    const v = Number(String(text).trim());
+    const max = sizeMax();
+    if (String(text).trim() !== '' && Number.isFinite(v) && max) store.prefs.size = Math.min(max, Math.max(1, Math.round(v)));
+    ui.sizeDraft = null;
+  }
+  // A problem is picked if any of its parts matches the filters; then all of its parts come along, so multi-part
+  // questions always stay together.
   function startFromPrefs() {
     const p = store.prefs;
+    if (ui.sizeDraft != null) commitSize(ui.sizeDraft);
     const pids = problemsOf(filtered(p));
-    const n = p.size === 'all' ? pids.length : Math.min(p.size, pids.length);
+    const n = setSize();
     const chosen = new Set(pids.slice().sort(() => Math.random() - 0.5).slice(0, n));
-    const ids = QUESTIONS.filter((q) => chosen.has(q.problem) && p.types.includes(q.type) && p.exams.includes(PROBLEMS[q.problem].exam))
+    const ids = QUESTIONS.filter((q) => chosen.has(q.problem) && p.exams.includes(PROBLEMS[q.problem].exam))
       .sort((a, b) => ORDER[a.id] - ORDER[b.id]).map((q) => q.id);
     newSession(ids, topicNames(p.topics));
   }
@@ -1490,14 +1502,56 @@
     return `${selected.length} selected`;
   }
 
+  const practiceMinutesOk = () => { const p = store.prefs; return !p.timerOn || (Number.isInteger(p.minutes) && p.minutes >= 1 && p.minutes <= 60); };
+  function practiceSummaryHTML() {
+    const p = store.prefs;
+    const max = sizeMax();
+    return `<b>${max}</b> matching question${max === 1 ? '' : 's'} · this set has <b>${setSize()}</b>${p.topics.length > 2 ? ` · ${esc(topicNames(p.topics))}` : ''}`;
+  }
+  // Set size: a number box styled like the dropdowns, typed into directly or stepped with the arrows on its right.
+  // What is typed stays as typed (ui.sizeDraft) until it is a valid size; it is normalized on blur and before starting.
+  function setSizeBox() {
+    const max = sizeMax();
+    const size = setSize();
+    const text = ui.sizeDraft != null ? ui.sizeDraft : String(max ? size : store.prefs.size);
+    const unit = (v) => (Number(v) === 1 ? 'question' : 'questions');
+    const width = `${Math.max(1, text.length) + 0.5}ch`; // as wide as the number, so the unit sits right after it
+    return `<div class="dd dd-size">
+      <div class="dd-btn dd-num">
+        <label class="dd-label" for="set-size">Set size</label>
+        <span class="dd-val"><input type="number" id="set-size" class="dd-num-input" style="width:${width}" min="1" max="${max}" step="1" inputmode="numeric" value="${esc(text)}" ${max ? '' : 'disabled'} aria-describedby="set-size-note"> <span class="dd-num-unit" id="set-size-unit">${unit(text)}</span></span>
+        <span class="dd-step">
+          <button type="button" class="dd-step-btn" data-action="size-step" data-d="1" aria-label="One more question" ${max && size < max ? '' : 'disabled'}>▲</button>
+          <button type="button" class="dd-step-btn" data-action="size-step" data-d="-1" aria-label="One fewer question" ${max && size > 1 ? '' : 'disabled'}>▼</button>
+        </span>
+        <span class="sr-only" id="set-size-note">From 1 to ${max}, the number of matching questions.</span>
+      </div>
+    </div>`;
+  }
+  // While a size is typed: refresh the summary, the arrows and Start in place, so the input keeps focus and caret.
+  function refreshSizeLive() {
+    const max = sizeMax();
+    const size = setSize();
+    const summary = document.querySelector('.start-row .summary');
+    if (summary) summary.innerHTML = practiceSummaryHTML();
+    const start = document.querySelector('[data-action="start"]');
+    if (start) start.disabled = !(size && practiceMinutesOk());
+    const [up, down] = document.querySelectorAll('.dd-step-btn');
+    if (up) up.disabled = !(max && size < max);
+    if (down) down.disabled = !(max && size > 1);
+    const unit = document.getElementById('set-size-unit');
+    if (unit) unit.textContent = Number(ui.sizeDraft) === 1 ? 'question' : 'questions';
+  }
+
   function renderHome() {
     const p = store.prefs;
     const s = store.session;
     const pool = filtered(p);
     const pids = problemsOf(pool);
     const base = filtered(p, true);
-    const n = p.size === 'all' ? pids.length : Math.min(p.size, pids.length);
-    const minutesOk = !p.timerOn || (Number.isInteger(p.minutes) && p.minutes >= 1 && p.minutes <= 60);
+    if (pids.length && p.size > pids.length) p.size = pids.length; // fewer groups match now: the set shrinks to fit
+    const n = setSize();
+    const minutesOk = practiceMinutesOk();
 
     const resume = s && !s.finished ? `
       <div class="resume" role="region" aria-label="Unfinished practice">
@@ -1517,15 +1571,12 @@
       <p class="hint">Numbers are questions (each may have several parts). Leave everything unchecked to include all topics.</p>`;
     const examsBody = `<div class="dd-list">${Object.values(EXAMS).map((e) => optRow('checkbox', 'exams', e.id, e.label, p.exams.includes(e.id))).join('')}</div>`;
     const diffBody = `<div class="dd-list">${DIFFS.map((d) => optRow('checkbox', 'difficulties', d, d[0].toUpperCase() + d.slice(1), p.difficulties.includes(d))).join('')}</div>`;
-    const typesBody = `<div class="dd-list">${TYPES.map((t) => optRow('checkbox', 'types', t.id, t.name, p.types.includes(t.id))).join('')}</div>`;
-    const sizeBody = `<div class="dd-list">${SIZES.map((z) => optRow('radio', 'size', z, z === 'all' ? `All (${pids.length})` : `${z} questions`, p.size === z)).join('')}</div>`;
     const timerBody = `<div class="timer-config">
         <label><input type="checkbox" id="timer-on" ${p.timerOn ? 'checked' : ''}> Countdown timer</label>
         <label><input type="number" id="timer-min" min="1" max="60" step="1" value="${esc(p.minutes)}" ${p.timerOn ? '' : 'disabled'} aria-label="Minutes (1 to 60)"> min</label>
       </div>
       ${minutesOk ? '<p class="hint">Any whole number of minutes from 1 to 60, or turn it off.</p>' : '<p class="err" role="alert">Enter a whole number from 1 to 60.</p>'}`;
 
-    const typeName = (id) => TYPES.find((t) => t.id === id).name;
     const cap = (d) => d[0].toUpperCase() + d.slice(1);
     const mode = p.mode === 'exam' ? 'exam' : 'practice';
     const modeBtn = (m, title, sub) => `<button class="mode-opt" id="mode-${m}" data-action="mode" data-v="${m}" aria-pressed="${mode === m}"><b>${title}</b><span>${sub}</span></button>`;
@@ -1544,12 +1595,11 @@
           ${dropdown('topics', 'Topics', p.topics.length ? summarize(p.topics, TOPICS.map((t) => t.id), topicName, 'All topics') : 'All topics', topicsBody, true)}
           ${dropdown('exams', 'Exams', summarize(p.exams, Object.keys(EXAMS), (id) => EXAMS[id].label, 'All midterms'), examsBody)}
           ${dropdown('difficulties', 'Difficulty', summarize(p.difficulties, DIFFS, cap, 'Any'), diffBody)}
-          ${dropdown('types', 'Question types', summarize(p.types, TYPES, typeName, 'All types'), typesBody)}
-          ${dropdown('size', 'Set size', p.size === 'all' ? 'All' : `${p.size} questions`, sizeBody)}
+          ${setSizeBox()}
           ${dropdown('timer', 'Timer', p.timerOn ? (minutesOk ? `${p.minutes} min` : 'Invalid') : 'Off', timerBody)}
         </div>
         <div class="start-row">
-          <div class="summary"><b>${pids.length}</b> matching question${pids.length === 1 ? '' : 's'} · this set has <b>${n}</b>${p.topics.length > 2 ? ` · ${esc(topicNames(p.topics))}` : ''}</div>
+          <div class="summary">${practiceSummaryHTML()}</div>
           <button class="btn btn-primary btn-lg" data-action="start" ${n && minutesOk ? '' : 'disabled'}>Start practice →</button>
         </div>
       </section>`}
@@ -2538,6 +2588,13 @@
       case 'menu': ui.menu = ui.menu === btn.dataset.id ? null : btn.dataset.id; break;
       case 'topics-all': p.topics = TOPICS.filter((t) => QUESTIONS.some((x) => x.topics.includes(t.id))).map((t) => t.id); break;
       case 'topics-none': p.topics = []; break;
+      case 'size-step': {
+        const typed = ui.sizeDraft != null ? parseSize(ui.sizeDraft) : null;
+        const max = sizeMax();
+        if (max) p.size = Math.min(max, Math.max(1, (typed || setSize()) + Number(btn.dataset.d)));
+        ui.sizeDraft = null;
+        break;
+      }
       case 'start':
         ui.menu = null;
         if (store.session && !store.session.finished && !confirm('Starting a new set replaces your unfinished one. Continue?')) return;
@@ -2697,7 +2754,7 @@
   });
 
   // Annotation toolbar. mousedown is cancelled so clicking a tool keeps the current text selection.
-  app.addEventListener('mousedown', (e) => { if (e.target.closest('#annot-bar')) e.preventDefault(); });
+  app.addEventListener('mousedown', (e) => { if (e.target.closest('#annot-bar, .dd-step-btn')) e.preventDefault(); });
   app.addEventListener('click', (e) => {
     const b = e.target.closest('[data-ann]');
     if (!b || b.disabled || !leftPid) return;
@@ -2729,6 +2786,7 @@
   app.addEventListener('change', (e) => {
     const el = e.target;
     if (el.id === 'timer-on') { store.prefs.timerOn = el.checked; save(); render(); return; }
+    if (el.id === 'set-size') { commitSize(el.value); save(); render(); return; }
     if (el.id === 'timer-min') {
       const v = Number(el.value);
       store.prefs.minutes = Number.isInteger(v) ? v : NaN;
@@ -2750,8 +2808,7 @@
     const pref = el.dataset && el.dataset.pref;
     if (pref) { // home-page dropdown options
       const p = store.prefs;
-      if (pref === 'size') p.size = el.value === 'all' ? 'all' : Number(el.value);
-      else toggleIn(p[pref], el.value);
+      toggleIn(p[pref], el.value);
       save(); render(); return;
     }
     const qid = el.dataset && el.dataset.qid;
@@ -2774,6 +2831,13 @@
 
   app.addEventListener('input', (e) => {
     const el = e.target;
+    if (el.id === 'set-size') { // keep what is typed; use it as soon as it is a valid size
+      ui.sizeDraft = el.value;
+      el.style.width = `${Math.max(1, el.value.length) + 0.5}ch`;
+      const v = parseSize(el.value);
+      if (v) { store.prefs.size = v; save(); }
+      refreshSizeLive(); return;
+    }
     if (el.id === 'timer-min') { // live validation without stealing focus
       const v = Number(el.value);
       store.prefs.minutes = el.value !== '' && Number.isInteger(v) ? v : NaN;

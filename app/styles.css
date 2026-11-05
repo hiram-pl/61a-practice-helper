@@ -71,6 +71,16 @@ p code, li code, .rich code { background: var(--code-bg); padding: 0 3px; border
 .dd-val { grid-row: 2; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dd-caret { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--muted); transition: transform .15s; }
 .dd.open .dd-caret { transform: rotate(180deg); }
+.dd-num { cursor: text; }
+.dd-num:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.dd-num-input { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; -moz-appearance: textfield; appearance: textfield; }
+.dd-num-input::-webkit-outer-spin-button, .dd-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.dd-num-input:focus, .dd-num-input:focus-visible { outline: none; }
+.dd-num-unit { font-weight: 600; }
+.dd-step { grid-row: 1 / span 2; grid-column: 2; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.dd-step-btn { border: 0; background: none; color: var(--muted); font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 4px; cursor: pointer; }
+.dd-step-btn:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.dd-step-btn:disabled { opacity: .35; cursor: default; }
 .dd-panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; min-width: 100%; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.16); }
 .dd.wide .dd-panel { width: min(520px, 92vw); }
 .dd-tools { display: flex; gap: 14px; padding: 0 6px 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }

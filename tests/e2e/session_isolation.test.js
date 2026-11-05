@@ -111,7 +111,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await click('[data-action="discard"]');
   S = await st();
   ok(S.session === null, 'Start Over discards the practice set (and its notes/annotations with it)');
-  await inject(`s.prefs.exams = ['${B.PROBLEMS[first].exam}']; s.prefs.topics = []; s.prefs.size = 'all'; return s;`);
+  await inject(`s.prefs.exams = ['${B.PROBLEMS[first].exam}']; s.prefs.topics = []; s.prefs.size = 999; /* more than match: every matching group */ return s;`);
   await click('[data-action="enter"]');
   await click('[data-action="start"]');
   await page.waitForSelector('#pane-right .part');
