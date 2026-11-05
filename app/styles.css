@@ -248,6 +248,9 @@ mark.hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0; }
 .btn-run { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-run:hover:not(:disabled) { background: #0b4a85; }
 .btn-run[aria-busy="true"] { cursor: progress; }
+#tutor-btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+#tutor-btn[aria-disabled="true"]:hover { background: var(--paper); }
+.tutor-msg { font-size: 13px; font-weight: 600; color: var(--bad); }
 .run-status { font-size: 12.5px; color: var(--muted); }
 .run-status.st-ok { color: var(--good); font-weight: 600; }
 .run-status.st-error, .run-status.st-timeout, .run-status.st-load-error, .run-status.st-crash { color: var(--bad); font-weight: 600; }

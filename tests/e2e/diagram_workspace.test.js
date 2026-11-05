@@ -157,6 +157,38 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const params = new URLSearchParams((url || '').split('#')[1] || '');
   ok(/def wrap\(s\):/.test(params.get('code') || '') && params.get('mode') === 'edit' && params.get('py') === '3' && params.get('cumulative') === 'true', 'Python Tutor: the code and options are in the URL');
   ok(opened[0] && opened[0][1] === '_blank' && opened[0][2] === 'noopener', 'Python Tutor: new tab, no access back to this page');
+  ok(await page.$eval('#tutor-btn', (b) => b.getAttribute('aria-disabled') === 'false'), 'Python Tutor: a question with no blanks in its code is always available');
+
+  // A question with blanks: unavailable (greyed, says what's missing) until every blank has an answer.
+  await click('#nav-toggle');
+  await click('#nav-fa25-3');
+  await page.waitForSelector('#tutor-btn');
+  const tutorState = () => page.evaluate(() => {
+    const b = document.getElementById('tutor-btn'), m = document.getElementById('tutor-msg');
+    return { off: b.getAttribute('aria-disabled') === 'true', faded: getComputedStyle(b).opacity < 0.6, msg: m.hidden ? '' : m.textContent, opened: window.__opened.length };
+  });
+  let ts = await tutorState();
+  ok(ts.off && ts.faded && !ts.msg, 'Python Tutor: greyed out while the code has empty blanks');
+  await click('#tutor-btn');
+  ts = await tutorState();
+  ok(ts.opened === 1 && ts.msg === 'Fill in every blank first. Still empty: (a), (b), (c).', `Python Tutor: a click doesn’t open it and says which blanks are empty (${ts.msg})`);
+  const parts = await page.$$eval('#review-work .part', (ps) => ps.map((p) => p.dataset.part));
+  for (const [i, id] of parts.entries()) {
+    const sel = `#review-work .part[data-part="${id}"]`;
+    if (await page.$(`${sel} input[type="radio"], ${sel} input[type="checkbox"]`)) await click(`${sel} input:not([type="hidden"])`);
+    else await page.$eval(`${sel} textarea`, (t) => { t.value = 'wrong but filled'; t.dispatchEvent(new Event('input', { bubbles: true })); });
+    await wait(80);
+    ts = await tutorState();
+    if (i === 0) ok(ts.off && ts.msg === 'Fill in every blank first. Still empty: (b), (c).', `Python Tutor: the message updates as blanks are filled (${ts.msg})`);
+  }
+  ts = await tutorState();
+  ok(!ts.off && !ts.faded && !ts.msg, 'Python Tutor: available again once every blank is filled, right or wrong');
+  await click('#tutor-btn');
+  ts = await tutorState();
+  ok(ts.opened === 2 && /def includes\(part, whole\):/.test(decodeURIComponent((await page.evaluate(() => window.__opened[1][0])).split('code=')[1])), 'Python Tutor: then a click opens it with the filled-in code');
+  await click('#nav-toggle');
+  await click('#nav-fa25-2');
+  await page.waitForSelector('#dg-canvas');
   const tutorCode = (pid) => page.evaluate((id) => {
     const B = window.CS61A_BANK;
     return window.CS61A_TUTOR.build(id, B.PROBLEMS[id].code, B, window.CS61A_TEST_SUITES);

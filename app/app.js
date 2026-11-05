@@ -346,6 +346,36 @@
       if (b.el.className !== cls) b.el.className = cls;
       b.el.title = f ? `Blank (${b.name}): your answer. Click to go to this part.` : `Blank (${b.name}). Click to go to this part.`;
     });
+    updateTutorBtn(ed.pid);
+  }
+  // Blanks in a problem's code that have no answer yet, in code order. Python Tutor can't run code with blanks in it.
+  function emptyBlanks(pid) {
+    const ed = editors[pid];
+    if (!ed) return [];
+    const text = ed.cm ? ed.cm.getValue() : ed.wrap.querySelector('textarea').value;
+    return [...new Set([...text.matchAll(TOKEN_RE)].map((m) => m[1]))].filter((name) => !blankFill(pid, name));
+  }
+  // What still blocks Python Tutor. A part left out of this practice set (by its filters) can't be answered here.
+  function tutorNeeds(pid, empty) {
+    const names = (list) => list.map((n) => `(${n})`).join(', ');
+    const open = empty.filter((n) => partForBlank(pid, n)), absent = empty.filter((n) => !partForBlank(pid, n));
+    return [open.length ? `Fill in every blank first. Still empty: ${names(open)}.` : '',
+      absent.length ? `${absent.length === 1 ? 'Blank' : 'Blanks'} ${names(absent)} ${absent.length === 1 ? 'isn’t' : 'aren’t'} in this practice set, so the code can’t be completed here.` : ''].filter(Boolean).join(' ');
+  }
+  // The Python Tutor button looks unavailable until every blank is filled (any answer counts, right or wrong).
+  // It stays clickable, so a click can say what's missing.
+  function updateTutorBtn(pid) {
+    const btn = document.getElementById('tutor-btn');
+    if (!btn || leftPid !== pid) return;
+    const empty = emptyBlanks(pid);
+    btn.setAttribute('aria-disabled', String(empty.length > 0));
+    btn.title = empty.length ? tutorNeeds(pid, empty)
+      : 'Step through this code in Python Tutor. Opens pythontutor.com in a new tab with the code from the editor.';
+    const msg = document.getElementById('tutor-msg');
+    if (msg && !msg.hidden) {
+      if (empty.length) msg.textContent = btn.title; // keep the list current as blanks are filled
+      else { msg.hidden = true; msg.textContent = ''; }
+    }
   }
   function buildBlanks(ed) {
     ed.blanks.forEach((b) => b.mark.clear());
@@ -1846,6 +1876,7 @@
       <div class="run-bar">
         <button class="btn btn-sm btn-run" id="run-btn" data-action="run-code" title="${suite ? 'Run this code and its verified tests' : 'Run this code with Python in your browser'}">▶ Run Code</button>
         <button class="btn btn-sm" id="tutor-btn" data-action="open-tutor" title="Step through this code in Python Tutor. Opens pythontutor.com in a new tab with the code from the editor.">Python Tutor ↗</button>
+        <span class="tutor-msg" id="tutor-msg" role="status" aria-live="polite" hidden></span>
         ${suite ? `<span class="run-suite" id="run-suite">Includes ${plural(suite.cases.length, 'verified test')}</span>` : ''}
         <span class="run-status" id="run-status" role="status" aria-live="polite"></span>
       </div>
@@ -1855,6 +1886,13 @@
   // Composing Programs' Python Tutor reads its starting code from the URL hash. Frames of exited functions stay
   // visible (cumulative), like the diagrams on the exams.
   function openTutor(pid) {
+    const empty = emptyBlanks(pid);
+    if (empty.length) {
+      const msg = document.getElementById('tutor-msg');
+      msg.textContent = tutorNeeds(pid, empty);
+      msg.hidden = false;
+      return;
+    }
     const code = window.CS61A_TUTOR.build(pid, runnableCode(pid), window.CS61A_BANK, window.CS61A_TEST_SUITES);
     window.open(`https://pythontutor.com/cp/composingprograms.html#code=${encodeURIComponent(code)}&cumulative=true&curInstr=0&mode=edit&py=3`, '_blank', 'noopener');
   }

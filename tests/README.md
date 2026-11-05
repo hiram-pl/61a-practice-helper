@@ -28,7 +28,7 @@ to test a served copy. `npm run test:guides` needs `python3`.
 | `phase8_2024_exams` | Fall 2024 / Spring 2024 Midterm 2: structure and points vs the PDFs, full exams in order, official answers score 45/45 and 50/50, A+ staff-graded, history unchanged, topic practice, diagram image, saved-filter migration, Run Code suite |
 | `phase9_2023_exams` | Fall 2023 / Spring 2023 Midterm 2: structure and points vs the PDFs, full exams in order, official answers score 45/45, A+ staff-graded, history unchanged, diagram workspace (8 blanks, saved into the attempt), tree illustration, topic practice, saved-filter migration, Run Code suite with the Tree `__str__` setup |
 | `phase10_practice_setup` | Practice setup: no Question Types box, Set size and Timer on the left of row 2, set size default 5 / 1 to the matching count / typing, arrows, decimals, empty and out-of-range input / filter changes, Start disabled with no matches, complete question groups, old saved preferences, resuming a saved set, phone layout |
-| `diagram_workspace` | Environment diagram workspace (pen, typing in blanks, lists, magnetic arrows, undo/redo, saving, exam to review) and the Python Tutor link (the classes and calls it adds) |
+| `diagram_workspace` | Environment diagram workspace (pen, typing in blanks, lists, magnetic arrows, undo/redo, saving, exam to review) and the Python Tutor link (the classes and calls it adds; greyed out until every blank is filled) |
 | `study_guides_doctest` | every study-guide example runs and prints what it shows |
 | `verify_test_bank` | every verified suite passes with the official solution and all accepted answers, and fails for every wrong choice and listed wrong answer (local Python, same harness as the browser) |
 
