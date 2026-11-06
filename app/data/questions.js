@@ -1,6 +1,7 @@
 // Question bank for the CS 61A practice prototype.
 //
-// Content source: CS 61A Midterm 2 of Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023 and Spring 2023
+// Content source: CS 61A Midterm 2 of Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023, Spring 2023,
+// Fall 2022 and Fall 2021
 // (exam + official solutions), transcribed for a personal/prototype build. Verify course-material permissions before publishing.
 //
 // Shape:
@@ -9,7 +10,8 @@
 //   QUESTIONS – one navigable item each, shown in the RIGHT pane
 //   ANSWER_KEY – kept separate from QUESTIONS so display code never touches answers by accident
 //
-// Inline text markup (rendered safely by app.js): `code`, **bold**, *italic*.
+// Inline text markup (rendered safely by app.js): `code`, **bold**, *italic*. In intro/outro text, a ``` fenced block
+// is shown as code, exactly as printed.
 // Code blanks: ⟦a⟧ renders as an exam-style blank labeled (a).
 // figure (optional): the exam's environment diagram image, { src, alt, width, height, slots }, shown in the
 //   diagram workspace on the right; slots are its empty blanks as [x, line y, width] in image pixels.
@@ -34,7 +36,8 @@ window.CS61A_BANK = (function () {
   ];
 
   // complete: every question of the original PDF is transcribed (checked against the PDFs' point values:
-  // Fall 2025, Spring 2025 and Spring 2024 total 50 points; Fall 2024, Fall 2023 and Spring 2023 total 45).
+  // Fall 2025, Spring 2025, Spring 2024 and Fall 2021 total 50 points; Fall 2024, Fall 2023 and Spring 2023 total 45;
+  // Fall 2022 prints 45 but its part values sum to 44, because Q6(b) prints 6 points over parts worth 1 + 1 + 2 + 1).
   // Set it to false for a partial transcription; Exam Mode then labels the full exam as incomplete.
   const EXAMS = {
     fa25: { id: 'fa25', label: 'Fall 2025 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
@@ -43,6 +46,8 @@ window.CS61A_BANK = (function () {
     sp24: { id: 'sp24', label: 'Spring 2024 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
     fa23: { id: 'fa23', label: 'Fall 2023 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
     sp23: { id: 'sp23', label: 'Spring 2023 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
+    fa22: { id: 'fa22', label: 'Fall 2022 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
+    fa21: { id: 'fa21', label: 'Fall 2021 Midterm 2', url: 'https://cs61a.org/resources/', complete: true },
   };
 
   const BUBBLE_NOTE = 'For questions with circular bubbles, select exactly one choice. For questions with square checkboxes, you may select multiple choices.';
@@ -335,7 +340,9 @@ m = map(add_t, s)
       outro: 'Write the value of each expression below or *Error* if an error occurs. Assume that each expression is evaluated in order and sequentially, so evaluating the first could affect the value of the second. Write *Map* for a map object and *Function* for a function.',
     },
     'sp25-2': {
-      exam: 'sp25', number: '2', title: 'This or That', points: 7,
+      // The PDF's Q2 is 7 points: (a) 3 + (b) 3 + (c) 1. Part (c) is its own problem (sp25-2c, below), so this header
+      // shows the 6 points of the parts listed with it.
+      exam: 'sp25', number: '2', title: 'This or That', points: 6,
       intro: 'Answer the questions about the code below. Draw an environment diagram, but the diagram itself will not be scored.',
       figure: { src: 'assets/sp25-mt2-q2.png', width: 646, height: 259, alt: 'From the exam: the code with line numbers 1 to 14, and a blank environment diagram. The Global frame binds f to func f(this) [parent=Global] and has one more blank binding. Frame f1: f [parent=Global] has three blank bindings and a blank Return value. Frame f2: g [parent=f1] has two blank bindings and a blank Return value.', slots: [[283, 45, 86], [380, 45, 44], [284, 91, 85], [380, 91, 44], [284, 114, 85], [380, 114, 44], [284, 135, 85], [380, 135, 43], [380, 161, 44], [284, 204, 85], [380, 204, 44], [284, 227, 85], [380, 227, 44], [381, 251, 43]] },
       code: code(`
@@ -1523,6 +1530,524 @@ def pack(n):
     yield from f(n, 0)
 `),
     },
+
+    // ───────────────────────────── Fall 2022 Midterm 2 ─────────────────────────────
+    'fa22-1': {
+      exam: 'fa22', number: '1', title: 'What would Python Python?', points: 7,
+      intro: 'Assume the code below has been executed.',
+      code: code(`
+class Snake:
+    legs = 0
+    def __init__(self, name):
+        self.name = name
+    def __str__(self):
+        return self.name
+    def run(self, s):
+        print("Snakes don't run")
+        return self.crawl()
+    def crawl(self):
+        print(f"{self} crawled")
+    def eat(self, s):
+        self.run(s)
+        print("Nom nom")
+
+class Python(Snake):
+    def run(self, s):
+        print(eval(s))  # eval(s) evaluates string s as a Python expression
+
+snek = Snake("atari")
+solidsnake = Snake("David")
+solidsnake.legs = 2
+solidsnake.run = lambda s: print("He ran")
+python = Python("pypy")
+`),
+      outro: 'For each expression below, write the output **displayed by the interactive Python interpreter** when the expression is evaluated.\n\n• If an output has multiple lines, write each line separately.\n\n• If an error occurs, write “Error”, but include all output displayed before the error.\n\n• If evaluation would run forever, write “Forever”.\n\n• To display a function value, write “Function”.\n\nEach expression below should be evaluated independently of previously-evaluated expressions.',
+    },
+    'fa22-2': {
+      exam: 'fa22', number: '2', title: 'Environmental Disaster', points: 6,
+      intro: 'Your friend asks you to help debug their program below, which doesn’t print what they expect. Complete the environment diagram, then answer questions about it. The diagram itself will not be scored; only the questions based on it.',
+      figure: { src: 'assets/fa22-mt2-q2.png', width: 685, height: 311, alt: 'From the exam: the code and an environment diagram to complete. The Global frame binds of to func of(us) [parent=Global] and surround to func surround(n, f) [parent=Global], and has a blank value for result. Frame f1: of [parent=Global] has a box for us labeled (a), and last and its Return value point to func last(k) [parent=f1]. Frame f2: surround [parent=Global] binds n to 3 and has boxes labeled (b) for f, (c) for result and (d) for its Return value. Frame f3: last has a blank parent, and blank values for k and its Return value.',
+        slots: [[377, 64, 37], [379, 102, 33], [379, 199, 33], [379, 221, 33], [379, 242, 33], [350, 266, 52], [377, 284, 37], [377, 303, 37]] },
+      code: code(`
+def of(us):
+    def last(k):
+        "The last k items of us"
+        while k > 0:
+            result.append(us.pop())
+            k = k - 1
+        return result
+    return last
+
+def surround(n, f):
+    "n is the first and last item of f(2)"
+    result = [n]
+    result = f(2)
+    result[0] = [n]
+    return result.append(n)
+
+result = [1]
+surround(3, of([4, 5, 6]))
+print(result)
+`),
+    },
+    'fa22-3a': {
+      exam: 'fa22', number: '3(a)', title: 'Hog Revisited — make_test_dice', points: 3,
+      intro: 'In Project 1, we created a simulator for the game of Hog without using lists or iterators. Let’s revise the implementation, but instead of representing dice as zero-argument functions, **we’ll represent dice as iterators over outcomes**.\n\nImplement `make_test_dice`, which takes a list of `outcomes`. It returns an infinite iterator that repeatedly cycles through the outcomes.',
+      code: code(`
+def make_test_dice(outcomes):
+    """Return an infinite iterator that cycles through the elements of outcomes.
+
+    >>> dice = make_test_dice([1, 2, 3])
+    >>> next(dice)
+    1
+    >>> next(dice)
+    2
+    >>> next(dice)
+    3
+    >>> next(dice)
+    1
+    >>> next(dice)
+    2
+    >>> next(dice)
+    3
+    >>> next(dice)
+    1
+    >>> next(dice)
+    2
+    """
+    outcomes = list(outcomes)
+    while True:
+        for i in ⟦a⟧:
+            ⟦b⟧
+`),
+    },
+    'fa22-3b': {
+      exam: 'fa22', number: '3(b)', title: 'Hog Revisited — roll_dice', points: 5,
+      intro: 'In Project 1, we created a simulator for the game of Hog without using lists or iterators. Let’s revise the implementation, but instead of representing dice as zero-argument functions, **we’ll represent dice as iterators over outcomes**.\n\nImplement `roll_dice`, which takes two arguments: a positive integer called `num_rolls` giving the number of dice to roll and a `dice` iterator that provides outcomes. It returns the number of points scored by rolling the `dice` `num_rolls` times in a turn. The points scored are either the sum of the dice outcomes or 1 (Sow Sad).\n\n• Sow Sad. If any of the dice outcomes is a 1, the current player’s score for the turn is 1.',
+      code: code(`
+def roll_dice(num_rolls, dice):
+    """Return the number of points scored by rolling dice num_rolls times.
+
+    >>> dice = make_test_dice([6, 6, 6, 6, 6, 1])
+    >>> roll_dice(5, dice) # 6, 6, 6, 6, 6
+    30
+    >>> roll_dice(5, dice) # 1, 6, 6, 6, 6
+    1
+    >>> roll_dice(2, dice) # 6, 1
+    1
+    >>> roll_dice(10,  make_test_dice([2, 4, 3])) # 2, 4, 3, 2, 4, 3, 2, 4, 3, 2
+    29
+    """
+    rolls = ⟦a⟧
+    if ⟦b⟧:
+        return 1
+    ⟦c⟧
+`),
+    },
+    'fa22-4a': {
+      exam: 'fa22', number: '4(a)', title: 'The Lambdanean Hydra — is_hydra', points: 4,
+      intro: 'Heracles is fighting the Lambdanean Hydra, a many-headed monster, where two heads regrow when one head gets chopped off. A hydra is represented by a tree, each head is represented by a leaf labeled 1, and each non-leaf node has two branches and is labeled with the number of leaves among its descendants. Here’s a six-headed hydra named `lerna`:\n\n```\nlerna=Tree(6,[Tree(4,[Tree(2,[Tree(1),Tree(1)]),Tree(2,[Tree(1),Tree(1)])]),Tree(2,[Tree(1),Tree(1)])]\n```\n\nImplement `is_hydra`, which takes in as input a Tree instance `t` and determines if `t` represents a valid hydra.',
+      illustration: { src: 'assets/fa22-mt2-q4a.png', width: 797, height: 313, alt: 'From the exam: a drawing of the six-headed hydra lerna, and the same tree drawn with circles: root 6 with branches 4 and 2; 4 has two branches labeled 2, each with two leaves labeled 1; 2 has two leaves labeled 1.' },
+      code: code(`
+def is_hydra(t):
+    """Return True if Tree instance t properly represents a hydra and False otherwise.
+
+    >>> is_hydra(Tree(1))
+    True
+    >>> is_hydra(Tree(2, [Tree(1), Tree(1)]))
+    True
+    >>> is_hydra(Tree(3, [Tree(1), Tree(2)]))  # Wrong leaf label
+    False
+    >>> is_hydra(Tree(3, [Tree(1), Tree(1)]))  # Wrong root label
+    False
+    >>> is_hydra(Tree(3, [Tree(3, [Tree(1), Tree(1)]), Tree(1)]))  # Wrong node label below root
+    False
+    >>>is_hydra(lerna)  # lerna the six-headed hydra is defined above
+    True
+    """
+    if t.is_leaf():
+        return t.label == 1
+    if len(t.branches) != 2:
+        return False
+    return (t.label == ⟦a⟧) and ⟦b⟧
+`),
+    },
+    'fa22-4b': {
+      exam: 'fa22', number: '4(b)', title: 'The Lambdanean Hydra — chop_head', points: 5,
+      intro: 'If Heracles cuts off the second head from the left, two new heads appear there, and all ancestor labels are updated.\n\nImplement `chop_head(hydra, n)`, which takes as input a Tree instance `hydra` representing a hydra and a positive integer `n`. It mutates `hydra` by chopping off the `n`th head from the left (adding two new adjacent heads in its place).',
+      illustration: { src: 'assets/fa22-mt2-q4b.png', width: 883, height: 217, alt: 'From the exam: the six-headed hydra before and after its second head from the left is chopped off. Before: root 6 with branches 4 and 2, and the second leaf (labeled 1) outlined. After: root 7 with branches 5 and 2; 5 has branches 3 and 2; 3 has a leaf 1 and a new node 2 with two new leaves labeled 1, outlined.' },
+      code: code(`
+def chop_head(hydra, n):
+    """
+    >>> lerna = Tree(1)
+    >>> chop_head(lerna, 1)  # Note that n is 1-indexed
+    >>> chop_head(lerna, 1)
+    >>> chop_head(lerna, 3)
+    >>> chop_head(lerna, 1)
+    >>> chop_head(lerna, 3)
+    >>> lerna                # Now lerna is a six-headed hydra (above left)
+    Tree(6,[Tree(4,[Tree(2,[Tree(1),Tree(1)]),Tree(2,[Tree(1),Tree(1)])]),
+            Tree(2,[Tree(1),Tree(1)])])
+    >>> chop_head(lerna, 2)
+    >>> lerna                # The mutated lerna now has seven heads (above right)
+    Tree(7,[Tree(5,[Tree(3,[Tree(1),Tree(2,[Tree(1),Tree(1)])]),Tree(2,[Tree(1),Tree(1)])]),
+            Tree(2,[Tree(1),Tree(1)])])
+    """
+    assert is_hydra(hydra)
+    assert n > 0 and n <= hydra.label
+    if hydra.is_leaf():
+        ⟦a⟧  # This blank may be filled with multiple lines of code
+        return
+    ⟦b⟧
+    left, right = hydra.branches
+    if ⟦c⟧:
+        chop_head(right, ⟦d⟧)
+    else:
+        chop_head(left, n)
+`),
+      outro: 'The options for blank (a), part i:\n\n```\nOption 1:  hydra = Tree(2,[Tree(1), Tree(1)])\n\nOption 2:  for _ in range(2):\n               hydra.branches.append(Tree(1))\n               hydra.label = 2\n\nOption 3:  hydra.label = Tree(2)\n           hydra.branches = [Tree(1),Tree(1)]\n\nOption 4:  hydra.label = 2\n           hydra.branches = [Tree(1), Tree(1)]\n\nOption 5:  hydra.label = 2\n           hydra.branches = [Tree(1)] * 2\n```',
+    },
+    'fa22-5a': {
+      exam: 'fa22', number: '5', title: 'Aim for 100 — count_subsets', points: 6,
+      intro: 'The function `count_subsets` takes as input a list of positive integers `s`. It returns the number of lists that sum to 100 and contain a subset of the elements of `s` in order.\n\n(a) Complete the following implementation of `count_subsets`.',
+      code: code(`
+def count_subsets(s):
+    """
+    >>> count_subsets([25, 50, 75, 100, 125, 150])  # [25, 75], [100]
+    2
+    >>> count_subsets([25, 50, 25, 75])  # [25, 75] (first 25), [25, 75] (second 25), [25, 50, 25]
+    3
+    >>> count_subsets(list(range(1,10000)))
+    444793
+    """
+
+def count_subsets(s):
+    def helper(sum_so_far, index):
+        if ⟦a⟧:
+            if ⟦b⟧:
+                return 1
+            return 0
+        return ⟦c⟧ + ⟦d⟧
+    return helper(0,0)
+`),
+    },
+    'fa22-5b-ii': {
+      exam: 'fa22', number: '5(b) ii', title: 'Aim for 100 — order of growth', points: 1,
+      intro: 'We decide to rewrite `count_subsets`, following a different approach:',
+      code: code(`
+def count_subsets(s):
+    values = [1]+[0]*100
+    for i in s:
+        for j in reversed(range(100-i+1)):
+            values[j+i]+=values[j]
+    return values[100]
+`),
+    },
+    'fa22-6a': {
+      exam: 'fa22', number: '6(a)', title: 'Point A to Point B — destinations', points: 2,
+      intro: 'A *graph* is a structure consisting of two parts:\n\n• A set of n nodes, which are labeled from 0 to n-1.\n\n• A set of directed edges, which go from one node (the source node) to another node (the destination).\n\nThe above is an example of a graph with 6 nodes, with edges represented as arrows. Note that a graph can have:\n\n• Nodes that have no edges to/from them (Node 3)\n\n• Two edges between the same two nodes, with source and destination reversed (The edges between Nodes 0 and 2)\n\n• An edge from a node to itself (Node 5)\n\nHowever, a graph cannot have two distinct edges from one node to another. For example, we cannot have a graph where two edges go from Node 0 to Node 1.\n\nWe say that a Node j is a **destination** of Node i if there is a directed edge from Node i to Node j. Thus, in the above example, Node 0 has two destinations (Nodes 1 and 2), and Node 1 has one destination (Node 4). Note that Node 0 is not considered a destination of Node 1.\n\nWe say that there is a **path** from Node i to Node j if either `i==j`, or we can go from Node i to Node j by following a sequence of edges in the graph. For example, we can get from Node 1 to Node 0 by following the edges `1->4`, then `4->2`, then `2->0`.\n\nGraphs are often used to represent transportation maps, where nodes represent individual locations, and edges represent a path you can take to go from one node to another.\n\nA `Graph` instance is constructed from a number of nodes and begins with no edges. Edges are added, and then the `destinations` method lists destinations for a node and the `has_path` method determines if a path exists between two nodes.\n\n```\n>>> g = Graph(6)       # A graph with 6 nodes and no edges.\n>>> g.add_edge(0, 2)  # Add an edge from node 0 (source) to node 2 (destination)\n>>> g.add_edge(2, 0)  # Add an edge from node 2 (source) to node 0 (destination)\n>>> g.add_edge(0, 1)\n>>> g.add_edge(1, 4)\n>>> g.add_edge(4, 2)\n>>> g.add_edge(5, 4)\n>>> g.add_edge(5, 5)\n>>> g.destinations(0)\n[1, 2]\n>>> g.destinations(5)\n[4, 5]\n>>> g.destinations(3)\n[]\n>>> g.has_path(0,2)  # 0 -> 2\nTrue\n>>> g.has_path(5,1)  # 5 -> 4 -> 2 -> 0 -> 1\nTrue\n>>> g.has_path(3,3)  # 3\nTrue\n>>> g.has_path(1,5)  # No path exists\nFalse\n```\n\nImplement the `destinations` method of the `Graph` class.',
+      illustration: { src: 'assets/fa22-mt2-q6.png', width: 241, height: 212, alt: 'From the exam: a graph of nodes 0 to 5 with edges 0 to 1, 0 to 2, 2 to 0, 1 to 4, 4 to 2, 5 to 4 and 5 to 5. Node 3 has no edges.' },
+      code: code(`
+class Graph:
+    "A graph."
+
+    def __init__(self, nodes):
+        self.nodes = nodes
+        self.edges = []
+
+    def add_edge(self, source, destination):
+        "Add an edge from source to destination."
+        if source >= 0 and source < self.nodes:
+            if destination >= 0 and destination < self.nodes:
+                if (source, destination) not in self.edges:
+                    self.edges.append((source, destination))
+
+    def destinations(self, source):
+        "Returns a list of all destinations of the given node."
+        assert source >= 0 and source < self.nodes
+        return ⟦a⟧
+
+    def has_path(self, source, destination):
+        "Returns True if a path exists from source to destination, and False otherwise."
+        ... # The implementation of this method is omitted, but assume it works.
+`),
+    },
+    'fa22-6b': {
+      exam: 'fa22', number: '6(b)', title: 'Point A to Point B — compose_path', points: 6,
+      intro: 'The function `compose_path` takes in a list of functions `funcs` and three non-negative integers, `x`, `y`, and `maxval`. It returns whether there exists a list of numbers `s` such that:\n\n• `s` begins with `x` and ends with `y`.\n\n• `s[i+1] = f(s[i])` for some `f` in `funcs`, for every adjacent pair of elements `s[i]` and `s[i+1]`.\n\n• `0 <= s[i]` and `s[i] < maxval` for all elements `s[i]`.\n\nAssume `x` and `y` are less than `maxval` and that all elements of `funcs` are one-argument functions that take in an integer and output an integer. Complete the implementation of `compose_path`. (**Hint**: Treat each function call f(x) as “moving” from x to f(x).)',
+      code: code(`
+def compose_path(funcs, x, y, maxval):
+    """
+    >>> f, g, h = lambda x: 2*x-1, lambda x: x*x+1, lambda x: x-4
+    >>> #3->10->6->11->122->118->114->110->106->102->98
+    >>> # g   h  f  g   h   h   h   h   h   h
+    >>> compose_path([f, g, h], 3, 98, 1000)
+    True
+    >>> #The above path hits 122, and no other path exists to get from 3 to 98
+    >>> compose_path([f, g, h], 3, 98, 122)
+    False
+    >>> [i for i in range(100) if compose_path([h], 10, i, 100)]
+    [2, 6, 10]
+    """
+    g = Graph(⟦a⟧)
+    for f in funcs:
+        ⟦b⟧:
+            ⟦c⟧
+    ⟦d⟧
+`),
+    },
+    'fa22-7': {
+      exam: 'fa22', number: '7', title: 'A+ Question 2: Deforestation', points: 0,
+      intro: '**This A+ question is not worth any points. It can only affect your course grade if you have a high A and might receive an A+. Finish the rest of the exam first!**\n\nImplement the function `tree_to_graph`, which takes as input a Tree instance. It returns a Graph instance (defined in the previous question) corresponding to the tree, with nodes ordered in pre-order starting with 0. Pre-order is defined as:\n\n• The root node is assigned the lowest value unassigned.\n\n• After this, the first branch of the tree is assigned values according to pre-order.\n\n• Then, the second branch of the tree is assigned values, and so on.\n\nFor example, calling `tree_to_graph` on this Tree instance to the left should create this Graph instance to the right.',
+      illustration: { src: 'assets/fa22-mt2-q7.png', width: 817, height: 247, alt: 'From the exam: on the left, the hydra tree with root 6, branches 4 and 2, and leaves labeled 1; on the right, the same shape as a graph with nodes numbered in pre-order: 0 at the root, 1 to 7 down the left branch (1, then 2 with 3 and 4, then 5 with 6 and 7), and 8 with 9 and 10 on the right.' },
+      code: code(`
+def tree_to_graph(tree):
+    def helper(tree, op1, op2):
+        a = op1()
+        return op2(a, [helper(b, op1, op2) for b in tree.branches]) or a
+    num_nodes = helper(tree, ⟦a⟧, ⟦b⟧)
+    g = Graph(num_nodes)
+    b = iter(range(num_nodes))
+    helper(tree, ⟦c⟧,⟦d⟧)
+    return g
+`),
+    },
+    'fa22-8': {
+      exam: 'fa22', number: '8', title: 'OPTIONAL', points: 0,
+      intro: '',
+      code: '',
+    },
+
+    // ───────────────────────────── Fall 2021 Midterm 2 ─────────────────────────────
+    'fa21-1': {
+      exam: 'fa21', number: '1', title: 'Hawkeye', points: 7,
+      intro: 'The box-and-pointer diagram for the value of `s` is shown after each line of the program below. Fill in the blanks to match the diagrams.',
+      illustration: { src: 'assets/fa21-mt2-q1.png', width: 395, height: 664, alt: 'From the exam: box-and-pointer diagrams of s after each line. After line 1: s is the list [3, 4]. After line 2: a third element points to a new one-element list whose element points back to s. After line 3: that inner list has three elements: a pointer to s, 4, and a pointer to itself. After line 4: s[2] points to a new one-element list whose element points to the inner list, which now holds a pointer to s and 4.' },
+      code: code(`
+s = [3, 4]
+
+s.append(⟦a⟧)
+
+⟦b⟧.⟦c⟧(⟦d⟧)
+
+s[2] = ⟦e⟧
+`),
+    },
+    'fa21-2a': {
+      exam: 'fa21', number: '2(a)', title: 'Doctor Change — change', points: 6,
+      intro: 'Implement `change`, a function that takes an integer `n` and a list of positive integers `coins`. It returns whether there is a subset of the values in `coins` that sums to `n`. As a side effect, `change` modifies `coins`.',
+      code: code(`
+def change(n, coins):
+    """Return whether a subset of coins adds up to n.
+
+    >>> change(10, [2, 7, 1, 8, 2])  # e.g., 2 + 8
+    True
+    >>> change(20, [2, 7, 1, 8, 2])  # e.g., 2 + 7 + 1 + 8 + 2
+    True
+    >>> change(6, [2, 7, 1, 8, 2])   # Impossible; only two 2's in coins
+    False
+    """
+    if n == 0:
+        return True
+    elif ⟦a⟧:
+        return False
+    coin = coins.pop()  # remove the end of coins and name it "coin"
+    return change(n, ⟦b⟧) ⟦c⟧ change(⟦d⟧, ⟦e⟧)
+`),
+    },
+    'fa21-2b': {
+      exam: 'fa21', number: '2(b)', title: 'Doctor Change — amounts', points: 5,
+      intro: 'Implement `amounts`, which takes a list of positive integers `coins`. It returns a sorted list of all unique non-negative integers `n` for which `change(n, coins)` returns `True`. You **may not** call `change`.',
+      code: code(`
+def amounts(coins):
+    """List all unique n such that change(n, coins) returns True (in sorted order).
+
+    >>> amounts([2, 5, 3])
+    [0, 2, 3, 5, 7, 8, 10]
+    >>> amounts([2, 7, 1, 8, 2])
+    [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20]
+    """
+    if not coins:
+        return ⟦a⟧
+    coin = coins[0]
+    rest = amounts(⟦b⟧)
+    return sorted(⟦c⟧ + [k + coin for ⟦d⟧])
+`),
+    },
+    'fa21-3a': {
+      exam: 'fa21', number: '3(a)', title: 'Shang-Chi — Valet and Garage', points: 6,
+      intro: 'Implement the `Valet` and `Garage` classes.\n\nA `Valet` instance has two instance attributes: their total `tips` and the `garage` where they work (a `Garage` instance).\n\n• The `park` method takes a string `car` and parks it in the `Garage` where they work.\n\n• The `wash` method takes a string `car` that has been parked in their garage and a number `tip`. The `Valet` who washed the car and the `Valet` who **most recently** parked the car split the tip.\n\nThe `Garage` constructor takes a list of the `Valet`s who work in that `Garage`. Assume that `park` and `wash` are only invoked on a `Valet` that already has a `Garage`.',
+      code: code(`
+class Valet:
+    """A valet is tipped after they wash a car,
+    or after one of their parked cars is washed.
+
+    >>> shaun = Valet()
+    >>> katy = Valet()
+    >>> g = Garage([shaun, katy])
+    >>> shaun.park('Benz')
+    >>> katy.park('BMW')
+    >>> shaun.wash('Benz', 1)   # $1.0 to Shaun
+    >>> katy.wash('Benz', 2)    # $1.0 to Katy, $1.0 to Shaun
+
+    >>> shaun.park('Rolls')
+    >>> katy.park('Rolls')
+    >>> katy.wash('BMW', 2)     # $2.0 to Katy
+    >>> shaun.wash('Rolls', 2)  # $1.0 to Shaun, $1.0 to Katy
+    >>> [shaun.tips, katy.tips]
+    [3.0, 4.0]
+    """
+    def __init__(self):
+        self.tips = 0
+        self.garage = None
+
+    def park(self, car):
+        ⟦a⟧
+
+    def wash(self, car, tip):
+        self.tips += tip / 2
+        ⟦b⟧ += tip / 2
+
+class Garage:
+    """A garage holds cars parked by the valets who work there."""
+    def __init__(self, valets):
+        self.cars = {}
+        for valet in valets:
+            ⟦c⟧ = ⟦d⟧
+`),
+    },
+    'fa21-3b': {
+      exam: 'fa21', number: '3(b)', title: 'Shang-Chi — ring', points: 2,
+      intro: '**Definition.** An *infinite* iterator `t` is one for which `next(t)` can be called any number of times and always returns a value.\n\nImplement `ring`, a generator function that takes a non-empty list `s`. It returns an infinite generator that repeatedly yields the values of `s` in the order they appear in `s`.',
+      code: code(`
+def ring(s):
+    """Yield all values of non-empty s in order, repeatedly.
+
+    >>> t = ring([2, 5, 3])
+    >>> [next(t), next(t), next(t), next(t), next(t), next(t), next(t)]
+    [2, 5, 3, 2, 5, 3, 2]
+    """
+    ⟦a⟧:
+        ⟦b⟧
+`),
+    },
+    'fa21-3c': {
+      exam: 'fa21', number: '3(c)', title: 'Shang-Chi — fork', points: 5,
+      intro: '**Definition.** An *infinite* iterator `t` is one for which `next(t)` can be called any number of times and always returns a value.\n\nImplement `fork`, a function that takes an infinite iterator `t`. It returns two infinite iterators that each iterate over the contents of `t`.',
+      code: code(`
+def fork(t):
+    """Return two iterators with the same contents as infinite iterator t.
+
+    >>> a, b = fork(ring([1, 2, 3]))
+    >>> [next(a), [next(b), next(b), next(b)], next(a), [next(b), next(b), next(b)], next(a)]
+    [1, [1, 2, 3], 2, [1, 2, 3], 3]
+    """
+    s = []
+    def copy():
+        i = 0
+        while True:
+            if ⟦a⟧:
+                s.append(⟦b⟧)
+            yield ⟦c⟧
+            i += 1
+    return ⟦d⟧
+`),
+    },
+    'fa21-4a': {
+      exam: 'fa21', number: '4(a)', title: 'Thanos — snap', points: 4,
+      intro: '*Hint*: you may call built-in sequence functions: `sum`, `max`, `min`, `all`, `any`, `map`, `filter`, `zip`, and `reversed`.\n\nImplement `snap`, which takes a one-argument function `f`, a one-argument function `g`, and a sequence `s`. It returns a list of `(x, f(x))` pairs (two-element tuples) for all `x` in `s` for which `g(f(x))` is a true value. The implementation of `snap` only calls `f` once per element of `s`; never twice.\n\n**Important:** For full credit, your implementation may only call `f` **once** on each element of `s`.',
+      code: code(`
+def snap(f, g, s):
+    """Return a list of (x, f(x)) pairs for each x in s such that g(f(x)) is a true value.
+
+    >>> snap(lambda x: x * x, lambda x: x < 10, range(5))
+    [(0, 0), (1, 1), (2, 4), (3, 9)]
+    >>> snap(lambda x: x * x, lambda x: x > 10, range(5))
+    [(4, 16)]
+    >>> snap(lambda x: x * x, lambda x: x and x - 9, range(5))
+    [(1, 1), (2, 4), (4, 16)]
+    """
+    return [(x, ⟦a⟧) for ⟦b⟧ in ⟦c⟧ if ⟦d⟧]
+`),
+    },
+    'fa21-4b': {
+      exam: 'fa21', number: '4(b)', title: 'Thanos — max_diff', points: 4,
+      intro: '*Hint*: you may call built-in sequence functions: `sum`, `max`, `min`, `all`, `any`, `map`, `filter`, `zip`, and `reversed`.\n\nImplement `max_diff`, which takes a non-empty sequence `s` and a one-argument function `f`. It returns a pair of elements `(v, w)` in `s` for which `f(v) - f(w)` is largest. `v` and `w` may be the same or different elements of `s`. Also, describe the order of growth of the run time of `max_diff`.',
+      code: code(`
+def max_diff(s, f):
+    """Return two elements (v, w) of s for which f(v) - f(w) is largest.
+
+    >>> max_diff(range(-7, 4), lambda x: x * x)  # (-7 * -7) - (0 * 0) = 49
+    (-7, 0)
+    >>> max_diff(['what', 'a', 'great', 'film'], len)  # len('great') - len('a')
+    ('great', 'a')
+    """
+    assert s, 's cannot be empty'
+    v, w = None, None
+    for x in s:
+        for y in s:
+            if v is None or ⟦a⟧:
+                ⟦b⟧
+    return v, w
+`),
+    },
+    'fa21-4c': {
+      exam: 'fa21', number: '4(c)', title: 'Thanos — max_diff_fast', points: 2,
+      intro: '*Hint*: you may call built-in sequence functions: `sum`, `max`, `min`, `all`, `any`, `map`, `filter`, `zip`, and `reversed`.\n\nImplement `max_diff_fast`, which has the same signature and behavior as `max_diff`, but has a faster order of growth of its run time.\n\n**Important.** You may **not** use a list comprehension in your solution.',
+      code: code(`
+def max_diff_fast(s, f):
+
+    return ⟦a⟧ , ⟦b⟧
+`),
+    },
+    'fa21-5a': {
+      exam: 'fa21', number: '5(a)', title: 'Groot — twig', points: 4,
+      intro: '**Definition.** A *twig* is a tree that is not a leaf but whose branches are all leaves.\n\nThe `Tree` and `Link` classes appear on your midterm 2 study guide. Assume they are defined.\n\nImplement `twig`, which takes a `Tree` instance t. It returns `True` if `t` is a twig and `False` otherwise.',
+      code: code(`
+def twig(t):
+    """Return True if Tree t is a twig and False otherwise.
+
+    >>> twig(Tree(1))
+    False
+    >>> twig(Tree(1, [Tree(2), Tree(3)]))
+    True
+    >>> twig(Tree(1, [Tree(2), Tree(3, [Tree(4)])]))
+    False
+    """
+    return ⟦a⟧ and ⟦b⟧
+`),
+    },
+    'fa21-5b': {
+      exam: 'fa21', number: '5(b)', title: 'Groot — twigs', points: 5,
+      intro: '**Definition.** A *twig* is a tree that is not a leaf but whose branches are all leaves.\n\nThe `Tree` and `Link` classes appear on your midterm 2 study guide. Assume they are defined.\n\nImplement `twigs`, which takes a `Tree` instance `t`. It returns a linked list (either a `Link` instance or `Link.empty`) containing all of the labels of the twigs in `t`. Labels should be in the same order as they appear in `repr(t)`.',
+      code: code(`
+def twigs(t):
+    """Return a linked list of the labels of the twigs in t.
+
+    >>> t = Tree(1, [Tree(2), Tree(3, [Tree(4)]), Tree(5, [Tree(6, [Tree(7), Tree(8)])])])
+    >>> print(twigs(t))
+    <3 6>
+    >>> print(twigs(Tree(0, [t, t, t])))
+    <3 6 3 6 3 6>
+    >>> twigs(Tree(0)) is Link.empty
+    True
+    """
+
+    def add_twigs(t, rest):
+
+        if twig(t):
+
+            return ⟦a⟧
+
+        for b in reversed(t.branches):
+
+            rest = ⟦b⟧
+
+        return rest
+
+    return add_twigs(t, ⟦c⟧)
+`),
+    },
   };
 
   // type: single_choice | multi_select | short_answer | code
@@ -1962,6 +2487,182 @@ def pack(n):
       type: 'short_answer', prompt: 'Fill in blank (f).' },
     { id: 'sp23-5aplus', problem: 'sp23-5aplus', label: 'i.', points: 0, topics: ['generators', 'recursion'], difficulty: 'hard', blank: 'A+',
       type: 'code', prompt: 'Fill in the blank.' },
+
+    // Fall 2022 — Q1 (blank letters restart in each part of Q3–Q6, so those ids include the part)
+    { id: 'fa22-1a', problem: 'fa22-1', label: '(a)', points: 1, topics: ['oop'], difficulty: 'easy',
+      type: 'short_answer', prompt: '`[snek.legs, Snake.legs]`' },
+    { id: 'fa22-1b', problem: 'fa22-1', label: '(b)', points: 2, topics: ['oop', 'hof'], difficulty: 'medium',
+      type: 'short_answer', prompt: '`solidsnake.eat("python")`' },
+    { id: 'fa22-1c', problem: 'fa22-1', label: '(c)', points: 2, topics: ['oop'], difficulty: 'hard',
+      type: 'short_answer', prompt: '`python.eat("snek")`' },
+    { id: 'fa22-1d', problem: 'fa22-1', label: '(d)', points: 2, topics: ['oop'], difficulty: 'medium',
+      type: 'short_answer', prompt: '`Snake.run(python, python)`' },
+    // Fall 2022 — Q2
+    { id: 'fa22-2a', problem: 'fa22-2', label: '(a)', points: 1, topics: ['env', 'lists'], difficulty: 'medium',
+      type: 'single_choice', prompt: '*Blank (a)*: What is the name `us` bound to in f1?', choices: ['A list [4, 5, 6]', 'A list [4, 5]', 'A list [4]'] },
+    { id: 'fa22-2b', problem: 'fa22-2', label: '(b)', points: 1, topics: ['env', 'hof'], difficulty: 'easy',
+      type: 'single_choice', prompt: '*Blank (b)*: What is the name `f` bound to in frame `f2`?', choices: ['func of(us) [parent=Global]', 'func last(k) [parent=f1]', 'None of the above'] },
+    { id: 'fa22-2c', problem: 'fa22-2', label: '(c)', points: 1, topics: ['env', 'lists'], difficulty: 'medium',
+      type: 'single_choice', prompt: '*Blank (c)*: What is the name `result` bound to in frame `f2`?', choices: ['The same list bound to the name result in the Global frame', 'A list that is not bound to any name in the Global frame'] },
+    { id: 'fa22-2d', problem: 'fa22-2', label: '(d)', points: 1, topics: ['env', 'lists'], difficulty: 'medium',
+      type: 'single_choice', prompt: '*Blank (d)*: What is the return value of frame `f2`?', choices: ['The same list bound to the name result in f2', 'A list that is one element longer than the one bound to the name result in f2', 'None of the above'] },
+    { id: 'fa22-2e', problem: 'fa22-2', label: '(e)', points: 2, topics: ['env', 'lists'], difficulty: 'hard',
+      type: 'short_answer', prompt: 'What is displayed by the last line, `print(result)`?' },
+    // Fall 2022 — Q3
+    { id: 'fa22-3a-a', problem: 'fa22-3a', label: 'i.', points: 1, topics: ['iterators', 'generators'], difficulty: 'easy', blank: 'a',
+      type: 'multi_select', mono: true, prompt: 'Which of these could fill in blank (a)? Select **all** that apply.',
+      choices: ['outcomes', 'outcomes + make_test_dice(outcomes)', 'outcomes.extend(make_test_dice(outcomes))', 'outcomes[0] + make_test_dice(outcomes[1:])', 'make_test_dice(outcomes) + make_test_dice(outcomes)', 'make_test_dice(outcomes[0]) + make_test_dice(outcomes[1:])'] },
+    { id: 'fa22-3a-b', problem: 'fa22-3a', label: 'ii.', points: 2, topics: ['generators'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-3b-a', problem: 'fa22-3b', label: 'i.', points: 2, topics: ['iterators', 'lists'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa22-3b-b', problem: 'fa22-3b', label: 'ii.', points: 1, topics: ['lists'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-3b-c', problem: 'fa22-3b', label: 'iii.', points: 2, topics: ['lists'], difficulty: 'easy', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    // Fall 2022 — Q4
+    { id: 'fa22-4a-a', problem: 'fa22-4a', label: 'i.', points: 2, topics: ['trees', 'lists'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa22-4a-b', problem: 'fa22-4a', label: 'ii.', points: 2, topics: ['trees', 'recursion'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-4b-a', problem: 'fa22-4b', label: 'i.', points: 2, topics: ['trees'], difficulty: 'hard', blank: 'a',
+      type: 'multi_select', prompt: 'Select **all** options that could fit in blank (a), which may have multiple lines.',
+      choices: ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5'] },
+    { id: 'fa22-4b-b', problem: 'fa22-4b', label: 'ii.', points: 1, topics: ['trees'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-4b-c', problem: 'fa22-4b', label: 'iii.', points: 1, topics: ['trees', 'recursion'], difficulty: 'medium', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa22-4b-d', problem: 'fa22-4b', label: 'iv.', points: 1, topics: ['trees', 'recursion'], difficulty: 'medium', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    // Fall 2022 — Q5
+    { id: 'fa22-5a-a', problem: 'fa22-5a', label: '(a) i.', points: 1, topics: ['recursion'], difficulty: 'easy', blank: 'a',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (a).', choices: ['index == s', 'index == len(s)', 'sum_so_far == 100', 'sum_so_far != 100'] },
+    { id: 'fa22-5a-b', problem: 'fa22-5a', label: '(a) ii.', points: 1, topics: ['recursion'], difficulty: 'easy', blank: 'b',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (b).', choices: ['index == s', 'index == len(s)', 'sum_so_far == 100', 'sum_so_far != 100'] },
+    { id: 'fa22-5a-c', problem: 'fa22-5a', label: '(a) iii.', points: 1, topics: ['recursion'], difficulty: 'medium', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Fill in blank (c).',
+      choices: ['count_subsets(s[index:])', 'count_subsets(s[1:])', 'helper(sum_so_far, index)', 'helper(sum_so_far, index + 1)'] },
+    { id: 'fa22-5a-d', problem: 'fa22-5a', label: '(a) iv.', points: 2, topics: ['recursion'], difficulty: 'medium', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    { id: 'fa22-5b-i', problem: 'fa22-5a', label: '(b) i.', points: 1, topics: ['efficiency'], difficulty: 'easy',
+      type: 'single_choice', prompt: 'What is the order of growth of the time required to evaluate `count_subsets`, in terms of the length of `s`?',
+      choices: ['Exponential', 'Quadratic', 'Linear', 'Logarithmic', 'Constant'] },
+    { id: 'fa22-5b-ii', problem: 'fa22-5b-ii', label: '(b) ii.', points: 1, topics: ['efficiency'], difficulty: 'medium',
+      type: 'single_choice', prompt: 'What is the order of growth of the time required to evaluate the new version of `count_subsets`, in terms of the length of `s`?',
+      choices: ['Exponential', 'Quadratic', 'Linear', 'Logarithmic', 'Constant'] },
+    // Fall 2022 — Q6
+    { id: 'fa22-6a-a', problem: 'fa22-6a', label: 'i.', points: 2, topics: ['oop', 'lists'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa22-6b-a', problem: 'fa22-6b', label: 'i.', points: 1, topics: ['oop', 'hof'], difficulty: 'easy', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa22-6b-b', problem: 'fa22-6b', label: 'ii.', points: 1, topics: ['oop', 'hof'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-6b-c', problem: 'fa22-6b', label: 'iii.', points: 2, topics: ['oop', 'hof'], difficulty: 'hard', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa22-6b-d', problem: 'fa22-6b', label: 'iv.', points: 1, topics: ['oop'], difficulty: 'medium', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    // Fall 2022 — Q7 (A+) and Q8 (optional)
+    { id: 'fa22-7a', problem: 'fa22-7', label: '(a)', points: 0, topics: ['trees', 'hof'], difficulty: 'hard', blank: 'a',
+      type: 'code', prompt: 'Fill in blank (a).' },
+    { id: 'fa22-7b', problem: 'fa22-7', label: '(b)', points: 0, topics: ['trees', 'hof'], difficulty: 'hard', blank: 'b',
+      type: 'code', prompt: 'Fill in blank (b).' },
+    { id: 'fa22-7c', problem: 'fa22-7', label: '(c)', points: 0, topics: ['trees', 'hof', 'iterators'], difficulty: 'hard', blank: 'c',
+      type: 'code', prompt: 'Fill in blank (c).' },
+    { id: 'fa22-7d', problem: 'fa22-7', label: '(d)', points: 0, topics: ['trees', 'hof'], difficulty: 'hard', blank: 'd',
+      type: 'code', prompt: 'Fill in blank (d).' },
+    { id: 'fa22-8a', problem: 'fa22-8', label: '(a)', points: 0, topics: [], difficulty: 'easy',
+      type: 'code', prompt: 'Draw a picture related to CS 61A or write a program about CS 61A.' },
+
+    // Fall 2021 — Q1
+    { id: 'fa21-1a', problem: 'fa21-1', label: '(a)', points: 2, topics: ['lists'], difficulty: 'medium', blank: 'a',
+      type: 'multi_select', mono: true, prompt: 'Which of these could fill in blank (a)? Check all that apply.',
+      choices: ['s', 's[:]', 's[0]', '[s]', '[s[:]]', '[s[0]]', 'list(s)', 'list(s[:])', 'list(s[0])'] },
+    { id: 'fa21-1b', problem: 'fa21-1', label: '(b)', points: 1, topics: ['lists'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-1c', problem: 'fa21-1', label: '(c)', points: 1, topics: ['lists'], difficulty: 'easy', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa21-1d', problem: 'fa21-1', label: '(d)', points: 1, topics: ['lists'], difficulty: 'medium', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (d)? (Select one.)',
+      choices: ['s[1]', 's[1:]', 's[1:2]', '[s[1]]', '[s[1:]]', '[s[1:2]]', '[s[1], s]', '[s[1]] + s'] },
+    { id: 'fa21-1e', problem: 'fa21-1', label: '(e)', points: 2, topics: ['lists'], difficulty: 'hard', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    // Fall 2021 — Q2
+    { id: 'fa21-2a-a', problem: 'fa21-2a', label: 'i.', points: 2, topics: ['recursion'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-2a-b', problem: 'fa21-2a', label: 'ii.', points: 1, topics: ['recursion', 'lists'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-2a-c', problem: 'fa21-2a', label: 'iii.', points: 1, topics: ['recursion'], difficulty: 'easy', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa21-2a-d', problem: 'fa21-2a', label: 'iv.', points: 1, topics: ['recursion'], difficulty: 'easy', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (d)? (Select one.)',
+      choices: ['n - coin', 'n - coins[0]', 'n - coins[1]', 'n - coins.pop()'] },
+    { id: 'fa21-2a-e', problem: 'fa21-2a', label: 'v.', points: 1, topics: ['recursion', 'lists'], difficulty: 'medium', blank: 'e',
+      type: 'short_answer', prompt: 'Fill in blank (e).' },
+    { id: 'fa21-2b-a', problem: 'fa21-2b', label: 'i.', points: 1, topics: ['recursion', 'lists'], difficulty: 'easy', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-2b-b', problem: 'fa21-2b', label: 'ii.', points: 1, topics: ['recursion', 'lists'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-2b-c', problem: 'fa21-2b', label: 'iii.', points: 1, topics: ['recursion', 'lists'], difficulty: 'medium', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (c)? (Select one.)',
+      choices: ['rest', 'rest[1:]', 'amounts(rest)', 'amounts(rest[1:])', '[k + coin for k in rest]', '[k + coin for k in rest[1:]]'] },
+    { id: 'fa21-2b-d', problem: 'fa21-2b', label: 'iv.', points: 2, topics: ['lists'], difficulty: 'hard', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    // Fall 2021 — Q3
+    { id: 'fa21-3a-a', problem: 'fa21-3a', label: 'i.', points: 2, topics: ['oop', 'fundamentals'], difficulty: 'hard', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-3a-b', problem: 'fa21-3a', label: 'ii.', points: 2, topics: ['oop', 'fundamentals'], difficulty: 'hard', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-3a-c', problem: 'fa21-3a', label: 'iii.', points: 1, topics: ['oop'], difficulty: 'medium', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa21-3a-d', problem: 'fa21-3a', label: 'iv.', points: 1, topics: ['oop'], difficulty: 'easy', blank: 'd',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (d)? (Select one.)',
+      choices: ['Garage', 'valet', 'valets', 'garage', 'self.valet', 'self.valets', 'self.garage', 'self'] },
+    { id: 'fa21-3b-a', problem: 'fa21-3b', label: 'i.', points: 1, topics: ['generators'], difficulty: 'easy', blank: 'a',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (a)? (Select one.)',
+      choices: ['while True', 'while s', 'for x in s', 'for x in ring(s)'] },
+    { id: 'fa21-3b-b', problem: 'fa21-3b', label: 'ii.', points: 1, topics: ['generators'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-3c-a', problem: 'fa21-3c', label: 'i.', points: 1, topics: ['generators', 'iterators'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-3c-b', problem: 'fa21-3c', label: 'ii.', points: 1, topics: ['iterators'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-3c-c', problem: 'fa21-3c', label: 'iii.', points: 1, topics: ['generators'], difficulty: 'medium', blank: 'c',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (c)? (Select one.)',
+      choices: ['from s', 'from t', 's[0]', 's[i]', 'next(t)'] },
+    { id: 'fa21-3c-d', problem: 'fa21-3c', label: 'iv.', points: 2, topics: ['generators'], difficulty: 'medium', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    // Fall 2021 — Q4
+    { id: 'fa21-4a-a', problem: 'fa21-4a', label: 'i.', points: 1, topics: ['lists', 'hof'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-4a-b', problem: 'fa21-4a', label: 'ii.', points: 1, topics: ['lists'], difficulty: 'medium', blank: 'b',
+      type: 'single_choice', mono: true, prompt: 'Which of these could fill in blank (b)? (Select one.)', choices: ['x', 'x, y', 'y', 'y, z'] },
+    { id: 'fa21-4a-c', problem: 'fa21-4a', label: 'iii.', points: 1, topics: ['hof', 'iterators', 'lists'], difficulty: 'hard', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
+    { id: 'fa21-4a-d', problem: 'fa21-4a', label: 'iv.', points: 1, topics: ['hof'], difficulty: 'medium', blank: 'd',
+      type: 'short_answer', prompt: 'Fill in blank (d).' },
+    { id: 'fa21-4b-a', problem: 'fa21-4b', label: 'i.', points: 1, topics: ['hof', 'fundamentals'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-4b-b', problem: 'fa21-4b', label: 'ii.', points: 1, topics: ['fundamentals'], difficulty: 'easy', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-4b-iii', problem: 'fa21-4b', label: 'iii.', points: 2, topics: ['efficiency'], difficulty: 'easy',
+      type: 'single_choice', prompt: 'What is the order of growth of the time required to evaluate `max_diff(s, f)` for a sequence `s` of length *n* and a function `f` that requires constant time to evaluate.',
+      choices: ['Exponential, Θ(bⁿ)', 'Quadratic, Θ(n²)', 'Linear, Θ(n)', 'Logarithmic, Θ(log₂ n)', 'Constant, Θ(1)'] },
+    { id: 'fa21-4c-a', problem: 'fa21-4c', label: 'i.', points: 1, topics: ['hof'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a), but do not use a comprehension.' },
+    { id: 'fa21-4c-b', problem: 'fa21-4c', label: 'ii.', points: 1, topics: ['hof'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b), but do not use a comprehension.' },
+    // Fall 2021 — Q5
+    { id: 'fa21-5a-a', problem: 'fa21-5a', label: 'i.', points: 2, topics: ['trees'], difficulty: 'medium', blank: 'a',
+      type: 'multi_select', mono: true, prompt: 'Which of these could fill in blank (a)? Check all that apply. *Hint*: The `bool` function returns `True` for a true value and `False` for a false value.',
+      choices: ['t', 'bool(t)', 't.is_leaf()', 'not t.is_leaf()', 't.branches', 'bool(t.branches)', 'len(t.branches)', 'len(t.branches) > 0', 'len(t.branches) >= 0'] },
+    { id: 'fa21-5a-b', problem: 'fa21-5a', label: 'ii.', points: 2, topics: ['trees', 'lists'], difficulty: 'medium', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-5b-a', problem: 'fa21-5b', label: 'i.', points: 2, topics: ['trees', 'links'], difficulty: 'medium', blank: 'a',
+      type: 'short_answer', prompt: 'Fill in blank (a).' },
+    { id: 'fa21-5b-b', problem: 'fa21-5b', label: 'ii.', points: 2, topics: ['trees', 'links', 'recursion'], difficulty: 'hard', blank: 'b',
+      type: 'short_answer', prompt: 'Fill in blank (b).' },
+    { id: 'fa21-5b-c', problem: 'fa21-5b', label: 'iii.', points: 1, topics: ['links'], difficulty: 'easy', blank: 'c',
+      type: 'short_answer', prompt: 'Fill in blank (c).' },
   ];
 
   // correct: choice index (single), array of indices (multi)
@@ -2147,6 +2848,81 @@ def pack(n):
     'sp23-5e': { accepted: ['park(n-2)'] },
     'sp23-5f': { accepted: ["yield s + '<>'"] },
     'sp23-5aplus': { accepted: ['[yes + s for s in f(n, k) if not s or s[0] != no]', '(yes + s for s in f(n, k) if not s or s[0] != no)'] },
+
+    'fa22-1a': { accepted: ['[0, 0]'], explanation: '`legs` is a class attribute. Only `solidsnake` got its own `legs`, so `snek.legs` finds the class value 0.' },
+    'fa22-1b': { accepted: ['He ran\nNom nom'], explanation: '`solidsnake.run` is an instance attribute: a plain function (not a bound method) that prints “He ran”. `eat` calls it, then prints “Nom nom”.' },
+    'fa22-1c': { accepted: ['atari\nNom nom'], explanation: '`Python.run` prints `eval("snek")`, the global `snek`, and printing it uses `__str__`, its name.' },
+    'fa22-1d': { accepted: ["Snakes don't run\npypy crawled", 'Snakes don’t run\npypy crawled'], explanation: 'Calling through the class runs `Snake.run` with `self` bound to `python`, so `self.crawl()` prints the `pypy` name. The returned `None` is not displayed.' },
+    'fa22-2a': { correct: 2, explanation: '`last(2)` pops two elements from `us` (6, then 5), leaving `[4]`.' },
+    'fa22-2b': { correct: 1 },
+    'fa22-2c': { correct: 0, explanation: '`last` appends to and returns the global `result` (its own frame has no `result`), so `f(2)` returns the global list.' },
+    'fa22-2d': { correct: 2, explanation: '`result.append(n)` returns `None`, so the frame returns `None`.' },
+    'fa22-2e': { accepted: ['[[3], 6, 5, 3]'], explanation: 'The global list starts as `[1]`, gets 6 and 5 from `last`, has its first element replaced by `[3]`, and then 3 appended.' },
+    'fa22-3a-a': { correct: [0] },
+    'fa22-3a-b': { accepted: ['yield i'] },
+    'fa22-3b-a': { accepted: ['[next(dice) for _ in range(num_rolls)]', '[next(dice) for i in range(num_rolls)]', '[next(dice) for x in range(num_rolls)]'] },
+    'fa22-3b-b': { accepted: ['1 in rolls'] },
+    'fa22-3b-c': { accepted: ['return sum(rolls)'] },
+    'fa22-4a-a': { accepted: ['sum([b.label for b in t.branches])', 'sum(b.label for b in t.branches)', 't.branches[0].label + t.branches[1].label'] },
+    'fa22-4a-b': { accepted: ['is_hydra(t.branches[0]) and is_hydra(t.branches[1])', 'all([is_hydra(b) for b in t.branches])'] },
+    'fa22-4b-a': { correct: [1, 3], explanation: 'Options 2 and 4 change the leaf itself into a two-headed node. Option 1 only rebinds the local name, Option 3 sets the label to a Tree, and Option 5 uses the same Tree object twice.' },
+    'fa22-4b-b': { accepted: ['hydra.label += 1', 'hydra.label = hydra.label + 1'], explanation: 'Chopping one head adds one leaf below this node.' },
+    'fa22-4b-c': { accepted: ['n > left.label', 'left.label < n'], explanation: 'The left branch holds the first `left.label` heads.' },
+    'fa22-4b-d': { accepted: ['n - left.label'] },
+    'fa22-5a-a': { correct: 1 },
+    'fa22-5a-b': { correct: 2 },
+    'fa22-5a-c': { correct: 3, explanation: 'Skip `s[index]`.' },
+    'fa22-5a-d': { accepted: ['helper(sum_so_far+s[index], index + 1)', 'helper(s[index] + sum_so_far, index + 1)'], explanation: 'Use `s[index]`.' },
+    'fa22-5b-i': { correct: 0, explanation: 'Every element is either used or skipped, so the calls double with each element of `s`.' },
+    'fa22-5b-ii': { correct: 2, explanation: 'The inner loop runs at most 100 times, a constant, for each element of `s`.' },
+    'fa22-6a-a': { accepted: ['[i[1] for i in self.edges if i[0] == source]', '[e[1] for e in self.edges if e[0] == source]'] },
+    'fa22-6b-a': { accepted: ['maxval'] },
+    'fa22-6b-b': { accepted: ['for j in range(maxval)'] },
+    'fa22-6b-c': { accepted: ['g.add_edge(j, f(j))'], explanation: '`add_edge` ignores edges whose destination is outside the graph, so values of `f(j)` at or above `maxval` are dropped.' },
+    'fa22-6b-d': { accepted: ['return g.has_path(x, y)'], explanation: 'The graph contains all allowed transitions j → f(j) after iterating through all `f` and all `j`, so `has_path` says whether a sequence of allowed transitions exists.' },
+    'fa22-7a': { accepted: ['lambda: 1'] },
+    'fa22-7b': { accepted: ['lambda a, b: a+sum(b)'] },
+    'fa22-7c': { accepted: ['lambda: next(b)'] },
+    'fa22-7d': { accepted: ['lambda a, b: any([g.add_edge(a,i) for i in b])'] },
+
+    'fa21-1a': { correct: [3], explanation: 'After line 2, `s[2]` is a new one-element list whose element is `s` itself, which is `[s]`. Copies of `s` would point to a different list.' },
+    'fa21-1b': { accepted: ['s[2]'] },
+    'fa21-1c': { accepted: ['extend'] },
+    'fa21-1d': { correct: 1, explanation: 'Extending the inner list by `s[1:]` adds 4 and a pointer to the inner list itself (`s[2]`).' },
+    'fa21-1e': { accepted: ['[s[2].pop()]'], explanation: '`s[2].pop()` removes the inner list’s self-pointer and returns the inner list; wrapping it in a new list gives the final picture.' },
+    'fa21-2a-a': { accepted: ['n < 0 or not coins', 'not coins'], explanation: 'With no coins left, a nonzero `n` can’t be made. The official solution accepts either form.' },
+    'fa21-2a-b': { accepted: ['list(coins)', 'coins[:]'], explanation: 'The official solution notes that at least one of blanks (b) and (e) must copy `coins`, because `change` modifies the list it is given.' },
+    'fa21-2a-c': { accepted: ['or'] },
+    'fa21-2a-d': { correct: 0 },
+    'fa21-2a-e': { accepted: ['list(coins)', 'coins[:]'] },
+    'fa21-2b-a': { accepted: ['[0]'], explanation: 'With no coins, only 0 can be made.' },
+    'fa21-2b-b': { accepted: ['coins[1:]'] },
+    'fa21-2b-c': { correct: 0 },
+    'fa21-2b-d': { accepted: ['k in rest if k + coin not in rest'], explanation: 'Add `coin` to each amount the rest can make, skipping sums already in `rest` so the result has no repeats.' },
+    'fa21-3a-a': { accepted: ['self.garage.cars[car] = self'] },
+    'fa21-3a-b': { accepted: ['self.garage.cars[car].tips'], explanation: 'The garage remembers the valet who most recently parked each car.' },
+    'fa21-3a-c': { accepted: ['valet.garage'] },
+    'fa21-3a-d': { correct: 7 },
+    'fa21-3b-a': { correct: 0 },
+    'fa21-3b-b': { accepted: ['yield from s'] },
+    'fa21-3c-a': { accepted: ['len(s) == i', 'i == len(s)'], explanation: 'Only take a new value from `t` when this copy has caught up with everything seen so far.' },
+    'fa21-3c-b': { accepted: ['next(t)'] },
+    'fa21-3c-c': { correct: 3 },
+    'fa21-3c-d': { accepted: ['copy(), copy()'] },
+    'fa21-4a-a': { accepted: ['y'] },
+    'fa21-4a-b': { correct: 1 },
+    'fa21-4a-c': { accepted: ['zip(s, map(f, s))', '[(z, f(z)) for z in s]'], explanation: 'Pair each `x` with `f(x)` once, so `f` is never called twice on the same element.' },
+    'fa21-4a-d': { accepted: ['g(y)'] },
+    'fa21-4b-a': { accepted: ['f(x) - f(y) > f(v) - f(w)'] },
+    'fa21-4b-b': { accepted: ['v, w = x, y'] },
+    'fa21-4b-iii': { correct: 1, explanation: 'Two nested loops over `s`, each step constant time.' },
+    'fa21-4c-a': { accepted: ['max(s, key=f)'] },
+    'fa21-4c-b': { accepted: ['min(s, key=f)'], explanation: 'The largest difference pairs the element with the largest `f` value with the one with the smallest.' },
+    'fa21-5a-a': { correct: [3, 5, 7], explanation: 'Each of these is true exactly when `t` has branches. `t` and `bool(t)` are always true, and `len(t.branches)` makes a leaf return 0 instead of `False`.' },
+    'fa21-5a-b': { accepted: ['all([b.is_leaf() for b in t.branches])', 'all(b.is_leaf() for b in t.branches)'] },
+    'fa21-5b-a': { accepted: ['Link(t.label, rest)'] },
+    'fa21-5b-b': { accepted: ['add_twigs(b, rest)'], explanation: 'Going through the branches in reverse builds the linked list from the end, so labels come out in `repr` order.' },
+    'fa21-5b-c': { accepted: ['Link.empty'] },
   };
 
   return { TOPICS, EXAMS, PROBLEMS, QUESTIONS, ANSWER_KEY, BUBBLE_NOTE };

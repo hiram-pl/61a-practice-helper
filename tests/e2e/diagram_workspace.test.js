@@ -1,4 +1,4 @@
-// Environment diagram workspace: drawing, text, arrows, undo/redo, saving, and the
+// Environment diagram workspace and the Python Tutor link: drawing, text, arrows, undo/redo, saving, and the
 // path from an exam into its review. Also checks that ordinary re-renders leave the workspace alone.
 const puppeteer = require('puppeteer-core');
 const { APP_URL, CHROME, skipTour } = require('./config');
@@ -48,6 +48,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await gotoProblem('fa25-2');
   ok(await page.$eval('.dg-canvas img', (i) => i.complete && i.naturalWidth === 628), 'Fall 2025 Q2: the exam’s diagram image loads');
   ok(!(await page.$('#pane-left img')), 'the figure is no longer shown on the left');
+  ok(!(await page.$('#tutor-btn')), 'live exam: no Python Tutor button');
 
   await tool('pen');
   await drag(300, 40, 360, 90);
@@ -141,12 +142,70 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await click('#nav-fa25-2');
   await page.waitForSelector('#dg-canvas');
   ok(await page.$('.dg-layer .dg-pen') && await page.$eval('.dg-text:not(.dg-slot)', (i) => i.value === 's!'), 'review: the diagram is there');
+  ok(await page.$('#tutor-btn'), 'review: the Python Tutor button is available');
   await tool('pen');
   await drag(300, 200, 360, 230);
   S = await st();
   ok(JSON.stringify(S.attempts[0].diagrams) === submitted, 'review: new marks don’t change the submitted attempt');
   ok(Object.values(S.reviews)[0].diagrams['fa25-2'].length === 4, 'review: new marks are saved in the review workspace');
 
+  const opened = [];
+  await page.evaluate(() => { window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; }; });
+  await click('#tutor-btn');
+  opened.push(...await page.evaluate(() => window.__opened));
+  const url = opened[0] && opened[0][0];
+  ok(url && url.startsWith('https://pythontutor.com/cp/composingprograms.html#code='), 'Python Tutor: opens the Composing Programs version');
+  const params = new URLSearchParams((url || '').split('#')[1] || '');
+  ok(/def wrap\(s\):/.test(params.get('code') || '') && params.get('mode') === 'edit' && params.get('py') === '3' && params.get('cumulative') === 'true', 'Python Tutor: the code and options are in the URL');
+  ok(opened[0] && opened[0][1] === '_blank' && opened[0][2] === 'noopener', 'Python Tutor: new tab, no access back to this page');
+  ok(await page.$eval('#tutor-btn', (b) => b.getAttribute('aria-disabled') === 'false'), 'Python Tutor: a question with no blanks in its code is always available');
+
+  // A question with blanks: unavailable (greyed, says what's missing) until every blank has an answer.
+  await click('#nav-toggle');
+  await click('#nav-fa25-3');
+  await page.waitForSelector('#tutor-btn');
+  const tutorState = () => page.evaluate(() => {
+    const b = document.getElementById('tutor-btn'), m = document.getElementById('tutor-msg');
+    return { off: b.getAttribute('aria-disabled') === 'true', faded: getComputedStyle(b).opacity < 0.6, msg: m.hidden ? '' : m.textContent, opened: window.__opened.length };
+  });
+  let ts = await tutorState();
+  ok(ts.off && ts.faded && !ts.msg, 'Python Tutor: greyed out while the code has empty blanks');
+  await click('#tutor-btn');
+  ts = await tutorState();
+  ok(ts.opened === 1 && ts.msg === 'Fill in every blank first. Still empty: (a), (b), (c).', `Python Tutor: a click doesn’t open it and says which blanks are empty (${ts.msg})`);
+  const parts = await page.$$eval('#review-work .part', (ps) => ps.map((p) => p.dataset.part));
+  for (const [i, id] of parts.entries()) {
+    const sel = `#review-work .part[data-part="${id}"]`;
+    if (await page.$(`${sel} input[type="radio"], ${sel} input[type="checkbox"]`)) await click(`${sel} input:not([type="hidden"])`);
+    else await page.$eval(`${sel} textarea`, (t) => { t.value = 'wrong but filled'; t.dispatchEvent(new Event('input', { bubbles: true })); });
+    await wait(80);
+    ts = await tutorState();
+    if (i === 0) ok(ts.off && ts.msg === 'Fill in every blank first. Still empty: (b), (c).', `Python Tutor: the message updates as blanks are filled (${ts.msg})`);
+  }
+  ts = await tutorState();
+  ok(!ts.off && !ts.faded && !ts.msg, 'Python Tutor: available again once every blank is filled, right or wrong');
+  await click('#tutor-btn');
+  ts = await tutorState();
+  ok(ts.opened === 2 && /def includes\(part, whole\):/.test(decodeURIComponent((await page.evaluate(() => window.__opened[1][0])).split('code=')[1])), 'Python Tutor: then a click opens it with the filled-in code');
+  await click('#nav-toggle');
+  await click('#nav-fa25-2');
+  await page.waitForSelector('#dg-canvas');
+  const tutorCode = (pid) => page.evaluate((id) => {
+    const B = window.CS61A_BANK;
+    return window.CS61A_TUTOR.build(id, B.PROBLEMS[id].code, B, window.CS61A_TEST_SUITES);
+  }, pid);
+  const exclude = await tutorCode('fa25-4');
+  ok(/def exclude\(s, x\):/.test(exclude) && exclude.includes('>>> exclude(a, 3)'), 'Python Tutor: keeps the question code and its doctests');
+  ok(exclude.includes('class Link:') && exclude.indexOf('class Link:') < exclude.indexOf('def exclude('), 'Python Tutor: defines Link before the code');
+  ok(exclude.includes('\na = [3, 4, 5, 3.0, 6, 5, 3]\nprint(exclude(a, 3))\nprint(a)  # no change to a\n'), 'Python Tutor: adds the doctest calls, printing their results');
+  ok(exclude.includes('print(repr(exclude_link(a, 3)))'), 'Python Tutor: repr() when the doctest shows a Link');
+  ok((await tutorCode('sp25-1')).endsWith('print([x[1] for x in s if isinstance(x, list)])\nprint(next(m))\nprint(t.pop())\nprint([next(m) for z in range(2)])\n'), 'Python Tutor: adds What Would Python Display expressions in order');
+  ok((await tutorCode('sp24-1')).includes('class Link:'), 'Python Tutor: What Would Python Display gets Link too');
+  ok((await tutorCode('fa25-5')).includes('\nc.order(6)  # All'), 'Python Tutor: no print() around functions that print and return None');
+  ok(await page.evaluate(() => {
+    const B = window.CS61A_BANK;
+    return window.CS61A_TUTOR.build('fa25-2', B.PROBLEMS['fa25-2'].code, B, window.CS61A_TEST_SUITES).trim() === B.PROBLEMS['fa25-2'].code.trim();
+  }), 'Python Tutor: environment diagram code is unchanged');
 
   // Blanks: typeable straight away, Tab moves on, and they get out of the way while drawing.
   await tool('pen'); // back to typing

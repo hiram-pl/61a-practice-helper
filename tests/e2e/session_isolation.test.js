@@ -159,7 +159,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok((await cm()).startsWith('# legacy note') && (await marks()).pen === 1, 'saved v3 practice set keeps its own notes + annotations');
   await click('[data-action="home"], [data-action="go-home"]');
   S = await st();
-  ok(S.version === 4 && S.notes === undefined && !S.session.notes['sp25-1'], 'old notes for other problems are not carried into the set');
+  ok(S.version === 5 && S.notes === undefined && !S.session.notes['sp25-1'], 'old notes for other problems are not carried into the set');
 
   ok(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
   await browser.close();
