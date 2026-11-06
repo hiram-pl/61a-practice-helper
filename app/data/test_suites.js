@@ -1104,5 +1104,5 @@ Tree(1, [Tree(4)])`),
       ],
     },
   ];
-  return { version: 1, suites };
+  return { version: 1, suites, LINK, TREE };
 })();
