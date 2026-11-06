@@ -46,16 +46,16 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(await text('.progress') === 'Q 1 / 2' && await has('[data-action="check"]') && await has('#c-fa25-1a-2:checked'), 'v1 session resumes in practice (answers kept, Check Answer shown)');
   await click('[data-action="home"], [data-action="go-home"]');
   let S = await st();
-  ok(S.version === 4 && Array.isArray(S.attempts) && S.exam === null, 'store upgraded (version 4: attempts, exam, reviews, per-session notes)');
+  ok(S.version === 5 && Array.isArray(S.attempts) && S.exam === null, 'store upgraded (version 5: attempts, exam, reviews, per-session notes)');
 
   // ─── Exam setup: full past exam ───
   await click('#mode-exam');
   ok(await has('.exam-setup') && !(await has('[data-action="start"]')), 'Exam Mode shows exam setup instead of practice setup');
   ok(await has('#exam-kind-full:checked'), 'full past exam selected by default');
   const fullRows = await page.$$eval('.kind-list .kind-opt', (ls) => ls.map((l) => l.textContent.replace(/\s+/g, ' ').trim()));
-  const fullPts = { fa25: 50, sp25: 50, fa24: 45, sp24: 50, fa23: 45, sp23: 45 }; // the totals printed in each exam PDF
-  ok(fullRows.length === 6 && Object.values(B.EXAMS).every((e, i) => fullRows[i].startsWith(e.label) && new RegExp(`${fullPts[e.id]} points`).test(fullRows[i]) && /Complete/.test(fullRows[i])),
-    `all six exams listed with their PDF point totals + Complete tag`);
+  const fullPts = { fa25: 50, sp25: 50, fa24: 45, sp24: 50, fa23: 45, sp23: 45, fa22: 44, fa21: 50 }; // the PDFs' part values (fa22 prints 45; its Q6(b) parts sum to 5 of the 6 printed)
+  ok(fullRows.length === 8 && Object.values(B.EXAMS).every((e, i) => fullRows[i].startsWith(e.label) && new RegExp(`${fullPts[e.id]} points`).test(fullRows[i]) && /Complete/.test(fullRows[i])),
+    `all eight exams listed with their PDF point totals + Complete tag`);
   await click('#exam-id-sp25');
   await click('#exam-timer-off');
   ok(await page.$eval('#exam-min', (i) => i.disabled), 'untimed disables minutes');

@@ -183,6 +183,7 @@ mark.hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0; }
 .ann-btn[data-dg="pen"] { color: #c62828; }
 .dg-scroll { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .dg-canvas { position: relative; user-select: none; }
+.rich-pre { font-family: var(--mono); font-size: 13px; line-height: 1.45; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; overflow-x: auto; white-space: pre; }
 .exam-figure { margin: 10px 0 12px; }
 .exam-figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .exam-figure figcaption { font-family: var(--sans); font-size: 12px; color: var(--muted); margin-top: 4px; }
