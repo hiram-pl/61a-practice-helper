@@ -6,7 +6,7 @@
 //   N-4  answers typed with curly quotes ‘ ’ “ ” are graded like straight quotes; different answers still aren't.
 const puppeteer = require('puppeteer-core');
 const path = require('path');
-const { APP_URL, CHROME } = require('./config');
+const { APP_URL, CHROME, skipTour } = require('./config');
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`); if (!c) fails++; };
@@ -23,6 +23,7 @@ const legacyText = (s) => s.split(/\n\n/).map((p) => p.split(/(`[^`]*`)/).map((x
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
+  await skipTour(page);
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
