@@ -24,8 +24,9 @@
   const EXAM_DEFAULT_MINUTES = 120;
   const EXAM_MAX_MINUTES = 300;
   const DEFAULT_EXAM_PREFS = { kind: 'full', examId: Object.keys(EXAMS)[0], topics: [], picked: [], timerOn: true, minutes: EXAM_DEFAULT_MINUTES };
-  const STORE_VERSION = 4; // v1: prefs/session/notes/annotations; v2: + exam, attempts, examPrefs; v3: + reviews, frozen grades;
+  const STORE_VERSION = 5; // v1: prefs/session/notes/annotations; v2: + exam, attempts, examPrefs; v3: + reviews, frozen grades;
                            // v4: practice notes/annotations move onto the practice session (no longer shared across sessions)
+                           // v5: bold around code renders as bold, so text highlights in that prose are moved to match
 
   const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
   function load() {
@@ -145,6 +146,26 @@
     store.prefs.exams = Object.keys(EXAMS).filter((id) => store.prefs.exams.includes(id) || !knownExams.includes(id));
   }
   store.prefs.examsKnown = Object.keys(EXAMS);
+  // Before v5, bold around code (e.g. **Do not mutate `s`.**) showed its ** as text. Those characters are gone now, so
+  // a highlight saved before v5 in such prose is moved to the same words: each offset in the old text maps to the
+  // matching position in the new text (the new text is the old one with only those characters removed).
+  if (saved && !(Number(saved.version) >= 5)) {
+    const remap = {};
+    Object.entries(PROBLEMS).forEach(([pid, p]) => ['intro', 'outro'].forEach((where) => {
+      const before = proseText(p[where], true), now = proseText(p[where], false);
+      if (before === now) return;
+      const map = []; let j = 0;
+      for (let i = 0; i <= before.length; i++) { map[i] = j; if (i < before.length && before[i] === now[j]) j++; }
+      if (j === now.length) remap[`${pid}:${where}`] = map; // only when the new text is the old one minus some characters
+    }));
+    const owners = [store.session, store.exam, ...store.attempts, ...Object.values(store.reviews)];
+    owners.forEach((o) => Object.entries((isObj(o) && isObj(o.annotations) && o.annotations) || {}).forEach(([pid, list]) => {
+      (Array.isArray(list) ? list : []).forEach((a) => {
+        const map = isObj(a) && a.kind === 'hl' && remap[`${pid}:${a.where}`];
+        if (map && Number.isInteger(a.start) && Number.isInteger(a.end)) { a.start = map[Math.min(a.start, map.length - 1)]; a.end = map[Math.min(a.end, map.length - 1)]; }
+      });
+    }));
+  }
   if (!EXAMS[store.examPrefs.examId]) store.examPrefs.examId = DEFAULT_EXAM_PREFS.examId;
   // Set size is any whole number of question groups (up to how many match; see sizeMax). Older saves could hold
   // 'all' from the former dropdown, which now starts again from the default. The former Question Types filter is gone,
@@ -197,21 +218,42 @@
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+  // Code spans are set aside first, so bold and italic can wrap them (**Do not mutate `s`.**) and a * inside code is
+  // never read as markup. Until store v5 the text was split at code spans instead, which showed such bold as literal **.
   function inline(s) {
-    return String(s).split(/(`[^`]*`)/).map((part) => {
-      if (part.startsWith('`') && part.endsWith('`') && part.length > 1) return `<code>${esc(part.slice(1, -1))}</code>`;
-      return esc(part)
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*\s][^*]*?)\*/g, '<em>$1</em>');
-    }).join('');
+    const codes = [];
+    return esc(String(s).replace(/`([^`]*)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`))
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\s][^*]*?)\*/g, '<em>$1</em>')
+      .replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${esc(codes[i])}</code>`);
+  }
+  // The text a reader sees (what highlights count offsets in), as rendered now or (legacy) before store v5.
+  function plainInline(s, legacy) {
+    const marks = (t) => t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*\s][^*]*?)\*/g, '$1');
+    if (legacy) return String(s).split(/(`[^`]*`)/).map((p) => (p.startsWith('`') && p.endsWith('`') && p.length > 1 ? p.slice(1, -1) : marks(p))).join('');
+    const codes = [];
+    return marks(String(s).replace(/`([^`]*)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`)).replace(/\u0000(\d+)\u0000/g, (m, i) => codes[i]);
+  }
+  function proseText(s, legacy) {
+    if (!s) return '';
+    const paras = (t) => t.split(/\n\n/).map((p) => plainInline(p, legacy)).join('');
+    if (!s.includes('```')) return paras(s);
+    return s.split(/```\n?([\s\S]*?)\n?```/).map((part, i) => (i % 2 ? part : paras(part.replace(/^\n+|\n+$/g, '')))).join('');
   }
   function rich(s) {
     if (!s) return '';
-    return s.split(/\n\n/).map((p) => `<p>${inline(p)}</p>`).join('');
+    const paras = (t) => t.split(/\n\n/).map((p) => `<p>${inline(p)}</p>`).join('');
+    if (!s.includes('```')) return paras(s);
+    // ``` fences hold code shown as printed in the exam (indentation and blank lines kept); text between them is paragraphs.
+    return s.split(/```\n?([\s\S]*?)\n?```/).map((part, i) => (i % 2
+      ? `<pre class="rich-pre"><code>${esc(part)}</code></pre>`
+      : paras(part.replace(/^\n+|\n+$/g, '')))).filter((h) => h !== '<p></p>').join('');
   }
 
   // ───────────────────────────── Grading ─────────────────────────────
-  const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/"/g, "'").replace(/[;,]+$/, '');
+  // Only for comparing a typed answer with the accepted ones: whitespace and quote style don't count, including the
+  // curly quotes ‘ ’ “ ” some keyboards substitute. The answer itself, and the code Run Code executes, are unchanged.
+  const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/["‘’“”]/g, "'").replace(/[;,]+$/, '');
   const isMC = (q) => q.type === 'single_choice' || q.type === 'multi_select';
 
   function hasAnswer(s, id) {
@@ -1607,7 +1649,7 @@
       <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a><span class="feedback-note">Your feedback can make this platform better!</span></div>
       <div class="notice">No account needed. Your answers, code notes and annotations are saved in <b>this browser on this device</b> and are gone if you clear site data.</div>
       <p class="disclaimer">Privacy: this site uses Cloudflare Web Analytics, which collects aggregate traffic statistics (such as visits and page views) without cookies. Your answers, code, grades and exam history stay in your browser’s localStorage and are never sent anywhere.</p>
-      <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023 and Spring 2023) and credited on each question. Explanations were written for this prototype and are not official.</p>
+      <p class="disclaimer">Independent student project, not an official UC Berkeley / CS 61A service. Questions and answers are transcribed from CS 61A Midterm 2 (Fall 2025, Spring 2025, Fall 2024, Spring 2024, Fall 2023, Spring 2023, Fall 2022 and Fall 2021) and credited on each question. Explanations were written for this prototype and are not official.</p>
     </main>`;
   }
 
