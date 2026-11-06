@@ -375,12 +375,18 @@
     if (q.type === 'multi_select') return a && a.length ? { text: a.map((i) => q.choices[i]).join(' | '), kind: 'mc' } : null;
     return hasAnswer(s, q.id) ? { text: String(a).replace(/\s+$/, ''), kind: 'typed' } : null;
   }
+  // Exam Settings → Auto-fill Code (an exam in progress only). On by default for every new exam; the choice is kept on
+  // the exam itself, so Save & Leave / Resume keeps it for that attempt. Off only changes what the blanks *display*:
+  // answers stay saved and graded as before. Practice and review always fill the blanks.
+  const examActive = (s) => isExam(s) && !isReview(s) && !locked(s);
+  const autoFillOn = (s) => !(examActive(s) && s.autoFill === false);
   function fillBlanks(ed) {
     if (!ed || !ed.cm) return;
+    const show = autoFillOn(cur());
     ed.blanks.forEach((b) => {
       const pos = b.mark.find();
       if (!pos) return;
-      const f = blankFill(ed.pid, b.name);
+      const f = show ? blankFill(ed.pid, b.name) : null;
       // Continuation lines of a multi-line answer are indented to the blank's column.
       const col = pos.from.ch;
       const text = f ? f.text.split('\n').map((l, i) => (i ? ' '.repeat(col) + l : l)).join('\n') : `___(${b.name})___`;
@@ -727,6 +733,45 @@
     });
   }
 
+  function examSettingsHTML() {
+    const on = autoFillOn(cur());
+    return `<span class="exam-settings-wrap">
+        <button class="ann-btn" data-ann="settings" id="exam-settings-btn" title="Exam settings" aria-label="Exam settings" aria-haspopup="true" aria-expanded="false" aria-controls="exam-settings">${icon('more')}</button>
+        <div class="exam-settings" id="exam-settings" role="group" aria-labelledby="exam-settings-title" hidden>
+          <div class="exam-settings-title" id="exam-settings-title">Exam Settings</div>
+          <div class="exam-setting">
+            <span class="exam-setting-text"><span class="exam-setting-name" id="autofill-label">Auto-fill Code</span>
+              <span class="exam-setting-desc" id="autofill-desc">Show your selected answers in the code blanks.</span></span>
+            <button class="switch" data-ann="autofill" id="autofill-switch" role="switch" aria-checked="${on}" aria-labelledby="autofill-label" aria-describedby="autofill-desc"><span class="switch-knob"></span></button>
+          </div>
+        </div>
+      </span>`;
+  }
+  // The first sentence of the hint under the editor; in an exam it follows the Auto-fill Code setting.
+  const fillHintHTML = (on) => (on ? 'Your answers on the right appear in the blanks automatically: <span class="key-fill key-mc">selected choice</span> <span class="key-fill key-typed">typed answer</span>.'
+    : 'Auto-fill Code is off (<b>⋮</b> above): your answers are saved but don’t appear in the blanks.');
+  function setSettingsOpen(open, focusBtn) {
+    const panel = document.getElementById('exam-settings');
+    const btn = document.getElementById('exam-settings-btn');
+    if (!panel || !btn) return;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-pressed', String(open));
+    if (open) document.getElementById('autofill-switch').focus();
+    else if (focusBtn) btn.focus();
+  }
+  function toggleAutoFill() {
+    const s = cur();
+    if (!examActive(s)) return;
+    s.autoFill = !autoFillOn(s); // stored on the exam in progress only
+    save();
+    const sw = document.getElementById('autofill-switch');
+    if (sw) sw.setAttribute('aria-checked', String(s.autoFill));
+    const hint = document.getElementById('fill-hint');
+    if (hint) hint.innerHTML = fillHintHTML(s.autoFill);
+    if (leftPid) fillBlanks(editors[leftPid]);
+    announce(s.autoFill ? 'Auto-fill Code on: your selected answers show in the code.' : 'Auto-fill Code off: code blanks stay empty. Your answers are still saved.');
+  }
   function setAnnMode(mode) {
     ui.annMode = ui.annMode === mode ? 'none' : mode;
     const art = article();
@@ -1869,6 +1914,7 @@
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
     msg: '<path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />',
     tour: '<circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" />',
+    more: '<circle cx="12" cy="5.5" r="1.3" fill="currentColor" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /><circle cx="12" cy="18.5" r="1.3" fill="currentColor" />',
   };
   const FEEDBACK_URL = 'https://forms.gle/VqhUJDZj1UNJq3gRA'; // Google Form, opened in a new tab; nothing is collected here
   const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
@@ -1891,6 +1937,7 @@
         <span class="ann-sep" aria-hidden="true"></span>
         ${tool('undo', 'Undo')}${tool('redo', 'Redo')}
         ${tool('clear', 'Clear all annotations')}
+        ${examActive(cur()) ? examSettingsHTML() : ''}
         <span class="annot-hint" id="annot-hint" aria-live="polite"></span>
       </div>`;
     return `${bar}
@@ -1909,7 +1956,7 @@
           <div id="editor-host"></div>
           ${runSlotHTML(g.pid)}
         </div>
-        <p class="editor-hint">${review ? 'Your review answers (below) appear in the blanks: <span class="key-fill key-mc">selected choice</span> <span class="key-fill key-typed">typed answer</span>. Edit the code freely; your submitted version is kept. <kbd>Tab</kbd> indents, <kbd>⌘/</kbd> toggles a comment.</p>' : `Your answers on the right appear in the blanks automatically: <span class="key-fill key-mc">selected choice</span> <span class="key-fill key-typed">typed answer</span>. Click a blank to jump to its part. You can also type notes or <code>#</code> comments anywhere in the code; nothing is run. <kbd>Tab</kbd> indents, <kbd>⌘/</kbd> toggles a comment.</p>`}
+        <p class="editor-hint">${review ? 'Your review answers (below) appear in the blanks: <span class="key-fill key-mc">selected choice</span> <span class="key-fill key-typed">typed answer</span>. Edit the code freely; your submitted version is kept. <kbd>Tab</kbd> indents, <kbd>⌘/</kbd> toggles a comment.</p>' : `<span id="fill-hint">${fillHintHTML(autoFillOn(cur()))}</span> Click a blank to jump to its part. You can also type notes or <code>#</code> comments anywhere in the code; nothing is run. <kbd>Tab</kbd> indents, <kbd>⌘/</kbd> toggles a comment.</p>`}
         <div class="annot-text" data-annot="outro"></div>
         <svg class="annot-layer" aria-hidden="true"></svg>
       </article>
@@ -2914,6 +2961,8 @@
     if (k === 'hl') {
       if (highlightSelection()) { if (ui.annMode !== 'hl') setAnnMode('hl'); } else setAnnMode('hl');
     } else if (k === 'pen' || k === 'eraser') setAnnMode(k);
+    else if (k === 'settings') setSettingsOpen(document.getElementById('exam-settings').hidden);
+    else if (k === 'autofill') toggleAutoFill();
     else if (k === 'undo') undo(leftPid);
     else if (k === 'redo') redo(leftPid);
     else if (k === 'clear') {
@@ -3024,7 +3073,13 @@
     if (hadState) render(); // refresh Check button / stale feedback
   });
 
+  // Exam Settings closes on Escape or a click anywhere outside it.
+  const settingsOpen = () => { const p = document.getElementById('exam-settings'); return !!p && !p.hidden; };
+  document.addEventListener('click', (e) => {
+    if (settingsOpen() && !e.target.closest('.exam-settings-wrap')) setSettingsOpen(false);
+  });
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsOpen()) { setSettingsOpen(false, true); return; }
     if (e.key === 'Escape') {
       if (ui.navOpen || ui.dirOpen || ui.confirmReveal || ui.menu) {
         const wasNav = ui.navOpen;
