@@ -1,6 +1,6 @@
 // Bug fix: practice annotations / code / answers must be scoped to the practice session.
 const puppeteer = require('puppeteer-core');
-const { APP_URL, CHROME } = require('./config');
+const { APP_URL, CHROME, skipTour } = require('./config');
 const URL = APP_URL;
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
@@ -9,6 +9,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
+  await skipTour(page);
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

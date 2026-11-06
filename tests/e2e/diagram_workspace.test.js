@@ -1,7 +1,7 @@
 // Environment diagram workspace and the Python Tutor link: drawing, text, arrows, undo/redo, saving, and the
 // path from an exam into its review. Also checks that ordinary re-renders leave the workspace alone.
 const puppeteer = require('puppeteer-core');
-const { APP_URL, CHROME } = require('./config');
+const { APP_URL, CHROME, skipTour } = require('./config');
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`); if (!c) fails++; };
@@ -10,6 +10,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
+  await skipTour(page);
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -297,6 +298,38 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(links.length === 2 && links[1].fromRef.slot === 6, 'arrow: snaps from a value blank too');
   const sameSide = links[0].to[0] === links[1].to[0];
   ok(!sameSide || Math.abs(links[0].to[1] - links[1].to[1]) >= 3, 'arrow: two arrows to one target don’t land on the same spot');
+  const arrowCount = async () => (await diagram()).filter((a) => a.kind === 'arrow').length;
+  const n0 = await arrowCount();
+  const c3 = await center(cellOf(firstList, 0));
+  await clickAt(...c3); // click and let go: the end follows the pointer
+  await page.mouse.move(...await canvasAt(c3[0] + 60, c3[1] - 40), { steps: 4 });
+  await wait(60);
+  ok(await page.$$eval('.dg-layer .dg-arrow', (l) => l.length) > n0 && await arrowCount() === n0, 'arrow by clicks: after the first click the arrow follows the pointer, not saved yet');
+  await clickAt(c2[0] + 3, c2[1] - 2);
+  dd = await diagram();
+  const clicked = dd.filter((a) => a.kind === 'arrow').find((a) => a.fromRef && a.fromRef.list === firstList && a.fromRef.cell === 0);
+  ok(await arrowCount() === n0 + 1 && clicked && clicked.toRef && clicked.toRef.list === secondList, 'arrow by clicks: the second click places it and snaps onto the list');
+  await clickAt(...c3);
+  await page.mouse.move(...await canvasAt(c3[0] + 80, c3[1] + 30), { steps: 3 });
+  await page.keyboard.press('Escape');
+  await wait(60);
+  await page.mouse.move(...await canvasAt(c3[0] + 120, c3[1] + 50), { steps: 3 });
+  ok(await arrowCount() === n0 + 1 && await page.$eval('#dg-canvas', (c) => c.dataset.mode === 'arrow'), 'arrow by clicks: Esc cancels the arrow in progress and keeps the Arrow tool');
+  await tool('undo');
+  ok(await arrowCount() === n0, 'arrow by clicks: one undo removes it');
+  const cellsOf = async (id) => (await diagram()).find((a) => a.id === id).cells.length;
+  const plusAt = async (id, k) => page.mouse.click(...await canvasAt(...await center(`.dg-list[data-did="${id}"] [data-dgl="${k}"]`)));
+  const m0 = await cellsOf(secondList);
+  await plusAt(secondList, 'add'); await wait(60); await page.keyboard.press('Escape');
+  ok(await cellsOf(secondList) === m0 + 1, 'list: + works while the Arrow tool is on');
+  await plusAt(secondList, 'remove'); await wait(60);
+  ok(await cellsOf(secondList) === m0, 'list: − works while the Arrow tool is on');
+  await tool('list');
+  await plusAt(secondList, 'add'); await wait(60); await page.keyboard.press('Escape');
+  ok(await cellsOf(secondList) === m0 + 1 && (await diagram()).filter((a) => a.kind === 'list').length === 2, 'list: + works while the List tool is on, without making a new list');
+  await plusAt(secondList, 'remove'); await wait(60);
+  await tool('list');
+  await tool('arrow');
   await tool('arrow');
   const before = links[0].to.slice();
   const grip = await center(`.dg-list[data-did="${secondList}"] .dg-grip`);

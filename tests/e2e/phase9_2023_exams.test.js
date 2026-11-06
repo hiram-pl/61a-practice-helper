@@ -5,7 +5,7 @@
 // Needs internet access the first time (Pyodide is loaded from the jsDelivr CDN) for the Run Code check.
 const puppeteer = require('puppeteer-core');
 const path = require('path');
-const { APP_URL, CHROME } = require('./config');
+const { APP_URL, CHROME, skipTour } = require('./config');
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`); if (!c) fails++; };
@@ -58,6 +58,7 @@ ok(Object.keys(B.PROBLEMS).filter((pid) => /^sp23/.test(pid)).every((pid) => !B.
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
+  await skipTour(page);
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
