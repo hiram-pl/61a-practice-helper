@@ -675,3 +675,4 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
 /* Scope note (data/in_scope.js): what part of a past-exam question is no longer taught. */
 .scope-note { flex-basis: 100%; font-family: var(--sans); font-size: 12.5px; line-height: 1.45; color: var(--ink); background: var(--warn-soft); border: 1px solid #f0d27a; border-radius: 8px; padding: 7px 10px; margin: 2px 0 8px; }
 .scope-note b { font-weight: 700; }
+.scope-note code { background: #fff; border: 1px solid #e5cf86; border-radius: 4px; padding: 0 4px; }

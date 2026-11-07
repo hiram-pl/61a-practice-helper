@@ -39,15 +39,15 @@ window.CS61A_SCOPE = {
     'fa25-3': { status: 'note', source: 'ed',
       note: 'The definition below says “repr string”. Here that just means what Python shows when it evaluates a tree (like `Tree(2, [Tree(20)])`), so the question is still in scope.' },
     'sp25-3a': { status: 'note', source: 'ed',
-      note: '`Event` defines `__repr__`, which is no longer taught. It only decides how events look in the tests; the rest of the question is in scope.' },
+      note: 'The `Event` class defines a `__repr__` method, which is no longer taught. That method only decides how events look in the tests, so the rest of the question is in scope.' },
     'sp25-3b': { status: 'note', source: 'ed',
-      note: '`Event` (from part (a)) defines `__repr__`, which is no longer taught. It only decides how events look in the tests; the rest of the question is in scope.' },
+      note: 'The `Event` class (from part (a)) defines a `__repr__` method, which is no longer taught. That method only decides how events look in the tests, so the rest of the question is in scope.' },
     'fa23-3': { status: 'note', source: 'ed',
-      note: 'This class defines `__str__`, which is no longer taught. Blank (f), which depends on it, has been removed; the other blanks are in scope.' },
+      note: 'The `Book` class defines a `__str__` method, which is no longer taught. Blank (f) depends on that method, so it was removed. The other blanks are in scope.' },
     'fa22-1': { status: 'note', source: 'inferred',
-      note: '`Snake` defines `__str__`, which is no longer taught. All you need to know: printing a `Snake` shows its name.' },
+      note: 'The `Snake` class defines a `__str__` method, which is no longer taught. All you need to know: printing a `Snake` object shows its name.' },
     'sp24-1': { status: 'note', source: 'ed',
-      note: 'The `shake` code mutates a linked list, which is out of scope, so the parts that use it were removed. The remaining part only uses `cruel`.' },
+      note: 'Parts (a) and (b) use the `shake` function, which mutates a linked list (out of scope), so they were removed, along with part (d) (orders of growth). The remaining part (c) only uses the `cruel` function and is in scope.' },
   },
 
   questions: {
@@ -70,9 +70,9 @@ window.CS61A_SCOPE = {
     'sp23-4e': { status: 'out', reason: 'Mutates a tree’s branches', source: 'ed' },
     // Fall 2022
     'fa22-1c': { status: 'note', source: 'inferred',
-      note: 'The answer uses `__str__`: `print(snek)` shows the snake’s name.' },
+      note: 'This answer uses the `__str__` method: printing the `snek` object shows its name.' },
     'fa22-1d': { status: 'note', source: 'inferred',
-      note: 'The answer uses `__str__`: `f"{self} crawled"` puts the snake’s name in the string.' },
+      note: 'This answer uses the `__str__` method: `f"{self} crawled"` puts the snake’s name in the string.' },
     'fa22-5b-i': { status: 'out', reason: 'Orders of growth', source: 'inferred' },
     'fa22-5b-ii': { status: 'out', reason: 'Orders of growth', source: 'inferred' },
     // Fall 2021
