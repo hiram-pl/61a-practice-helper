@@ -7,11 +7,27 @@
 (function () {
   'use strict';
 
-  const { TOPICS, EXAMS, PROBLEMS, QUESTIONS, ANSWER_KEY, BUBBLE_NOTE } = window.CS61A_BANK;
+  const { TOPICS, EXAMS, PROBLEMS, ANSWER_KEY, BUBBLE_NOTE } = window.CS61A_BANK;
+  const ALL_QUESTIONS = window.CS61A_BANK.QUESTIONS;
+  // Scope for this semester (data/in_scope.js). Out-of-scope parts stay in the bank, so saved sessions and past
+  // attempts that include them still load (QMAP and ORDER cover every part); they are only left out of new
+  // practice sets and exams, which are all built from QUESTIONS.
+  const SCOPE = window.CS61A_SCOPE || {};
+  const OUT_TOPICS = new Set(SCOPE.outOfScopeTopics || []);
+  const scopeEntry = (map, id) => (SCOPE[map] && Object.prototype.hasOwnProperty.call(SCOPE[map], id) ? SCOPE[map][id] : null);
+  function inScope(q) {
+    const p = scopeEntry('problems', q.problem), own = scopeEntry('questions', q.id);
+    if ((p && p.status === 'out') || (own && own.status === 'out')) return false;
+    return !(q.topics.length && q.topics.every((t) => OUT_TOPICS.has(t)));
+  }
+  const QUESTIONS = ALL_QUESTIONS.filter(inScope);
+  const scopeNote = (map, id) => { const e = scopeEntry(map, id); return e && e.status === 'note' && e.note ? e.note : ''; };
+  const scopeNoteHTML = (text) => (text ? `<div class="scope-note" role="note"><b>Scope note:</b> ${inline(text)}</div>` : '');
+  const TOPICS_IN_SCOPE = TOPICS.map((t) => t.id).filter((id) => !OUT_TOPICS.has(id));
   const GUIDES = window.CS61A_GUIDES || {}; // topic id -> study-guide concepts (data/study_guides.js)
   const TOUR = window.CS61A_TOUR || null;   // first-visit tour and one-time tips (tour.js)
-  const QMAP = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
-  const ORDER = Object.fromEntries(QUESTIONS.map((q, i) => [q.id, i]));
+  const QMAP = Object.fromEntries(ALL_QUESTIONS.map((q) => [q.id, q]));
+  const ORDER = Object.fromEntries(ALL_QUESTIONS.map((q, i) => [q.id, i]));
   const STORE_KEY = 'cs61a-practice:v1';
   const DIFFS = ['easy', 'medium', 'hard'];
   const TYPE_LABEL = { single_choice: 'Multiple choice', multi_select: 'Select all that apply', short_answer: 'Short answer', code: 'Code response · self-check' };
@@ -114,10 +130,10 @@
   const store = {
     version: STORE_VERSION, // same storage key as v1, so practice sessions saved before exams existed still load
     prefs: cleanPrefs(Object.assign({}, DEFAULT_PREFS, isObj(saved && saved.prefs) ? saved.prefs : {}), DEFAULT_PREFS,
-      { topics: TOPICS.map((t) => t.id), exams: Object.keys(EXAMS), difficulties: DIFFS }),
+      { topics: TOPICS_IN_SCOPE, exams: Object.keys(EXAMS), difficulties: DIFFS }),
     session: migrateSession(saved && saved.session), // the practice set; carries its own notes/annotations (see below)
     examPrefs: cleanPrefs(Object.assign({}, DEFAULT_EXAM_PREFS, isObj(saved && saved.examPrefs) ? saved.examPrefs : {}), DEFAULT_EXAM_PREFS,
-      { topics: TOPICS.map((t) => t.id), picked: Object.keys(PROBLEMS) }),
+      { topics: TOPICS_IN_SCOPE, picked: Object.keys(PROBLEMS) }),
     exam: migrateAttempt(saved && saved.exam),         // the exam in progress (never submitted), or null
     attempts: (Array.isArray(saved && saved.attempts) ? saved.attempts : []).map(migrateAttempt).filter(Boolean), // submitted exams, oldest first
     reviews: (saved && saved.reviews && typeof saved.reviews === 'object') ? saved.reviews : {}, // attemptId -> review workspace
@@ -175,7 +191,8 @@
   delete store.prefs.types;
   if (!['practice', 'exam'].includes(store.prefs.mode)) store.prefs.mode = 'practice';
   if (!['full', 'custom'].includes(store.examPrefs.kind)) store.examPrefs.kind = 'full';
-  store.examPrefs.picked = [...new Set(store.examPrefs.picked)].filter((pid) => PROBLEMS[pid]);
+  // A saved pick can be a question that is now wholly out of scope; drop it so it can't start an empty group.
+  store.examPrefs.picked = [...new Set(store.examPrefs.picked)].filter((pid) => PROBLEMS[pid] && QUESTIONS.some((q) => q.problem === pid));
   // view: which session the question screen shows. 'practice' | 'exam' (in progress) | 'review' (a submitted attempt)
   const ui = { screen: 'landing', view: 'practice', attemptId: null, menu: null, navOpen: false, dirOpen: false, hideClock: false, confirmReveal: null, annMode: 'none', examQuery: '', sizeDraft: null };
 
@@ -363,7 +380,7 @@
   function partForBlank(pid, name) {
     const s = cur();
     const ids = s ? s.ids : [];
-    return QUESTIONS.find((q) => q.problem === pid && q.blank === name && ids.includes(q.id)) || null;
+    return ALL_QUESTIONS.find((q) => q.problem === pid && q.blank === name && ids.includes(q.id)) || null;
   }
   // What a blank should display: { text, kind: 'mc' | 'typed' } or null when unanswered.
   function blankFill(pid, name) {
@@ -1539,6 +1556,13 @@
   const examGroups = (examId) => Object.keys(PROBLEMS).filter((pid) => PROBLEMS[pid].exam === examId && partsOf(pid).length);
   const shortExam = (examId) => EXAMS[examId].label.replace('Midterm ', 'MT');
   const groupTopics = (pid) => [...new Set(partsOf(pid).flatMap((q) => q.topics))];
+  // A problem's printed points, unless some of its parts were left out for being out of scope: then the total of the
+  // parts shown (`ids`). Older sessions that still include those parts keep the printed total.
+  function headerPoints(pid, ids) {
+    const left = ALL_QUESTIONS.some((q) => q.problem === pid && !inScope(q) && !ids.includes(q.id));
+    const shown = ids.map((id) => QMAP[id]);
+    return left && shown.every(hasPoints) ? shown.reduce((t, q) => t + q.points, 0) : PROBLEMS[pid].points;
+  }
   // Sum of the parts' points when all are published; otherwise the problem's printed total.
   function groupPoints(pid) {
     const parts = partsOf(pid);
@@ -1649,8 +1673,9 @@
       ${open ? `<div class="dd-panel" role="group" aria-label="${esc(label)}">${body}</div>` : ''}
     </div>`;
   }
-  function optRow(type, pref, value, label, on, extra, disabled) {
-    return `<label class="dd-opt${disabled ? ' disabled' : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+  const OUT_OF_SCOPE_LABEL = 'Not in scope for this semester';
+  function optRow(type, pref, value, label, on, extra, disabled, cls) {
+    return `<label class="dd-opt${disabled ? ' disabled' : ''}${cls ? ` ${cls}` : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
       <span class="dd-txt">${esc(label)}</span>${extra ? `<span class="dd-extra">${extra}</span>` : ''}</label>`;
   }
   function summarize(selected, all, nameOf, allLabel) {
@@ -1723,6 +1748,7 @@
     const topicName = (id) => TOPICS.find((t) => t.id === id).name;
     const topicsBody = `<div class="dd-tools"><button class="link" data-action="topics-all">Select all</button><button class="link" data-action="topics-none">Clear</button></div>
       <div class="dd-list cols">${TOPICS.map((t) => {
+        if (OUT_TOPICS.has(t.id)) return optRow('checkbox', 'topics', t.id, t.name, false, OUT_OF_SCOPE_LABEL, true, 'out-of-scope');
         const count = problemsOf(base.filter((q) => q.topics.includes(t.id))).length;
         return optRow('checkbox', 'topics', t.id, t.name, p.topics.includes(t.id), count ? String(count) : 'soon', !count);
       }).join('')}</div>
@@ -1844,6 +1870,7 @@
       const avail = TOPICS.filter((t) => Object.keys(PROBLEMS).some((pid) => groupTopics(pid).includes(t.id)));
       config = `<div class="chips" role="group" aria-label="Filter by topic">${avail.map((t) =>
         `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}
+        ${TOPICS.filter((t) => OUT_TOPICS.has(t.id)).map((t) => `<span class="chip chip-out" id="xt-${t.id}" title="${OUT_OF_SCOPE_LABEL}">${esc(t.name)} · ${OUT_OF_SCOPE_LABEL.toLowerCase()}</span>`).join('')}
         ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
         <input type="search" id="exam-search" class="pick-search" placeholder="Search by name, exam, or question number" value="${esc(ui.examQuery)}" aria-label="Search questions" autocomplete="off">
         <div class="pick-cols">
@@ -1942,8 +1969,8 @@
       </div>`;
     return `${bar}
       <article class="problem" id="problem-article" data-mode="${ui.annMode}" aria-label="Problem">
-        <div class="src"><span>Source: <a href="${esc(ex.url)}" target="_blank" rel="noopener">${esc(ex.label)}</a>, Q${esc(pr.number)}</span>${topics}</div>
-        <h2>${esc(pr.number)}. <span class="pts">(${pr.points.toFixed(1)} points)</span>${esc(pr.title)}</h2>
+        <div class="src"><span>Source: <a href="${esc(ex.url)}" target="_blank" rel="noopener">${esc(ex.label)}</a>, Q${esc(pr.number)}</span>${topics}${scopeNoteHTML(scopeNote('problems', g.pid))}</div>
+        <h2>${esc(pr.number)}. <span class="pts">(${headerPoints(g.pid, g.ids).toFixed(1)} points)</span>${esc(pr.title)}</h2>
         <div class="annot-text" data-annot="intro"></div>
         ${FIGURE_SLOT.has(g.pid) ? '<div hidden></div>' : pr.illustration ? `<figure class="exam-figure"><img src="${esc(pr.illustration.src)}" width="${esc(pr.illustration.width)}" height="${esc(pr.illustration.height)}" alt="${esc(pr.illustration.alt)}" draggable="false"><figcaption>Illustration from the exam PDF</figcaption></figure>` : ''}
         <div class="editor">
@@ -2338,6 +2365,7 @@
     return `<div class="part${ui.activeBlank && ui.activeBlank === q.blank ? ' active' : ''}" id="part-${id}" data-part="${id}" data-blank="${esc(q.blank || '')}">
       <p class="q-head"><span class="lbl">${esc(q.label)}</span>${pts}${inline(q.prompt)}
         <span class="part-meta">${exam && q.type === 'code' ? 'Code response' : TYPE_LABEL[q.type]} · <span class="diff-${q.difficulty}">${q.difficulty}</span></span></p>
+      ${scopeNoteHTML(scopeNote('questions', id))}
       ${response}
       ${actions}
       ${exam ? '' : renderFeedback(q, s)}

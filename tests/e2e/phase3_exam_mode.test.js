@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { APP_URL, CHROME, skipTour } = require('./config');
+const { APP_URL, CHROME, skipTour, fullBank } = require('./config');
 const URL = APP_URL;
 const OUT = require('os').tmpdir();
 const KEY = 'cs61a-practice:v1';
@@ -11,6 +11,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
   await skipTour(page);
+  await fullBank(page); // checks every transcribed part against the PDF, so scope is off
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
