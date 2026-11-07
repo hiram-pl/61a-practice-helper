@@ -2454,8 +2454,10 @@
       : exam ? `<p>Answer every part; nothing is graded until you <b>Submit Exam</b>, and no answers or solutions are shown before then. You can eliminate choices, mark questions for review, and jump between questions with the navigator.</p>
         <p><b>Save &amp; Leave</b> pauses the timer and keeps everything (answers, scratch code, annotations, eliminations, marks) for later.${t ? ' When the timer reaches 0:00 the exam is submitted automatically.' : ''}</p>`
       : '<p>All parts of a question are shown together on the right. Your answers fill the matching blanks in the code on the left. Use <b>Check Answer</b> to grade a part, or <b>Show Solution</b> to see the official answer.</p>';
-    return `<div class="left"><div class="brand">${exam ? 'CS 61A &amp; C88C Exam' : 'CS 61A &amp; C88C Practice'}</div>
-        <div class="set-name">${esc(s.title)} · ${exam ? `<span class="mode-tag">${isReview(s) ? 'Review' : 'Exam'}</span> · ` : ''}<button class="directions-btn" data-action="directions" aria-expanded="${ui.dirOpen}">Directions ▾</button></div></div>
+    // Directions sits next to the title, not at the end of the set name: a long name (many topics) is cut off with
+    // an ellipsis and would hide the button.
+    return `<div class="left"><div class="brand-row"><span class="brand">${exam ? 'CS 61A &amp; C88C Exam' : 'CS 61A &amp; C88C Practice'}</span><button class="directions-btn" data-action="directions" aria-expanded="${ui.dirOpen}">Directions ▾</button></div>
+        <div class="set-name">${exam ? `<span class="mode-tag">${isReview(s) ? 'Review' : 'Exam'}</span> · ` : ''}${esc(s.title)}</div></div>
       <div class="center"><span class="progress">Q ${s.index + 1} / ${s.groups.length}</span></div>
       ${timer}
       ${ui.dirOpen ? `<div class="directions" role="dialog" aria-label="Directions"><p style="margin-top:0">${esc(BUBBLE_NOTE)}</p>${directions}<p>Annotate the problem with the toolbar on the left: highlighter, red pen, eraser, undo/redo.</p><p style="margin-bottom:0">Keyboard: <code>←</code>/<code>→</code> previous/next question, <code>M</code> mark for review, <code>Esc</code> closes the question navigator.</p></div>` : ''}`;
