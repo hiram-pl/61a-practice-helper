@@ -49,6 +49,9 @@ window.CS61A_TOUR = (function () {
       html: '<p><b>Practice Mode</b> lets you check answers and see solutions as you go. <b>Exam Mode</b> is a timed past exam with no feedback until you submit.</p><p>Pick one, set it up below, and start.</p>' },
     directions('practice'),
     directions('exam'),
+    // The first scope note on screen (data/in_scope.js), in the left pane or beside a part.
+    { id: 'scope', find: one('.scope-note'), title: 'Scope notes',
+      html: '<p>Some past-exam questions use ideas that aren’t taught this semester. Parts that depend on them have been removed, so you won’t see them.</p><p>When a question is still in scope but touches one of those ideas, a yellow note like this one explains what you can ignore.</p>' },
     { id: 'annotate', find: one('#annot-bar'), title: 'Mark up the problem',
       html: () => `<p>Use these tools on the problem. Your marks are saved with this question.</p>${hooks.annTools()}` },
     { id: 'blanks', find: blankPair, title: 'Your answers fill the code',
