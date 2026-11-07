@@ -71,7 +71,7 @@ Topics are configured in `TOPICS`. A topic with no questions (such as Scheme) sh
 
 `app/data/in_scope.js` decides what is in scope; `questions.js` is never edited for this, so out-of-scope questions stay in the bank for later semesters. Staff usually post the list on Ed (for Fall 2026: Ed #1237, past Midterm 2 exams as practice for 61A Midterm 3 / C88C Midterm 2).
 
-- `problems` / `questions`: mark a whole problem or one part `status: 'out'` (hidden, with a `reason`) or `status: 'note'` (still asked, with a `note` shown beside it). Use `source: 'ed'` when the Ed post lists it and `'inferred'` when you applied the post's rules to an exam it doesn't cover.
+- `problems` / `questions`: mark a whole problem or one part `status: 'out'` (hidden, with a `reason`) or `status: 'note'` (still asked, with a `note`). Where the note shows follows where the out-of-scope idea is: a note under `problems` sits in the left pane (the idea is in the question text or code); a note under `questions` sits beside that part's answer box (the answer itself needs it). Use `source: 'ed'` when the Ed post lists it and `'inferred'` when you applied the post's rules to an exam it doesn't cover.
 - `outOfScopeTopics`: the topic shows "Not in scope for this semester" and can't be picked.
 - Exam totals, the full-exam list and the points in each question header only count what is shown. Saved sessions and past attempts that include hidden parts still open.
 - Run `node tests/verify_in_scope.js` after editing: it catches ids that don't exist (a typo would leave a question visible) and lists what each exam loses.

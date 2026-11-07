@@ -75,8 +75,8 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
     if (e === 'sp24') {
       ok(S.exam.groups[0].pid === 'sp24-1' && JSON.stringify(S.exam.groups[0].ids) === '["sp24-1c"]', 'sp24: Q1 keeps only part (c)');
       ok(/\(2\.0 points\)/.test(await text('#problem-article h2')), `sp24 Q1 header shows the in-scope points: “${await text('#problem-article h2')}”`);
-      const note = await text('#part-sp24-1c .scope-note');
-      ok(/shake/.test(note) && /cruel/.test(note), `sp24 1(c) has its part note: “${note}”`);
+      const note = await text('#problem-article .src .scope-note');
+      ok(/shake/.test(note) && /cruel/.test(note) && !(await page.$('#part-sp24-1c .scope-note')), `sp24 Q1: the note about the code is on the left: “${note}”`);
     }
   }
 
@@ -97,6 +97,13 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
   const n2 = await text('#problem-article .src .scope-note');
   const h2 = await text('#problem-article h2');
   ok(/__str__/.test(n2) && /\(5\.0 points\)/.test(h2) && !(await page.$('#part-fa23-3f')), `fa23 Q3: note “${n2.slice(0, 50)}…”, header “${h2}”, no blank (f)`);
+
+  // ── Answer notes sit beside the part; question notes on the left ──
+  await seed({ prefs: { ...prefs, mode: 'exam' }, examPrefs: { kind: 'custom', examId: 'fa25', topics: [], picked: ['fa22-1'], timerOn: false, minutes: 120 } });
+  await click('[data-action="enter"]'); await click('[data-action="start-exam"]'); await page.waitForSelector('#pane-right .part');
+  const partNotes = await page.$$eval('#pane-right .part', (ps) => ps.map((p) => [p.dataset.part, !!p.querySelector('.scope-note')]));
+  ok(JSON.stringify(partNotes) === '[["fa22-1a",false],["fa22-1b",false],["fa22-1c",true],["fa22-1d",true]]', `fa22 Q1: answer notes only on (c) and (d) ${JSON.stringify(partNotes)}`);
+  ok(/__str__/.test(await text('#problem-article .src .scope-note')), 'fa22 Q1: the note about the code is on the left');
 
   // ── Saved data from before this change still loads ──
   const old = { id: 'old-fa25', mode: 'exam', submitted: true, kind: 'full', examId: 'fa25', title: 'Fall 2025 Midterm 2', ids: ['fa25-1a', 'fa25-1c'], groups: [{ pid: 'fa25-1', ids: ['fa25-1a', 'fa25-1c'] }], index: 0,

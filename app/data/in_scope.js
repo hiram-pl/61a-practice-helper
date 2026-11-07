@@ -10,8 +10,10 @@
 // Shape:
 //   outOfScopeTopics – topic ids (from TOPICS in questions.js). The topic is shown as not in scope, and a question
 //                      whose topics are all out of scope is hidden even if it is not listed below.
-//   problems         – keyed by PROBLEMS id (the left pane). Applies to every part of that problem.
-//   questions        – keyed by QUESTIONS id (one part). Use this when only some parts are affected.
+//   problems         – keyed by PROBLEMS id. Applies to every part of that problem. A note here is shown in the left
+//                      pane: use it when the out-of-scope idea is in the question itself (its text or code).
+//   questions        – keyed by QUESTIONS id (one part). Use this when only some parts are affected. A note here is
+//                      shown beside that part's answer box: use it when the out-of-scope idea is in the answer.
 // Each entry:
 //   status: 'out'  – hidden from Practice and Exam mode (still kept in questions.js for later semesters)
 //           'note' – still asked, with `note` shown next to it
@@ -35,7 +37,7 @@ window.CS61A_SCOPE = {
     'fa22-4b': { status: 'out', reason: 'Mutates a tree', source: 'inferred' },
 
     'fa25-3': { status: 'note', source: 'ed',
-      note: 'This question mentions the “repr string” of a Tree. That is just what Python shows when it evaluates a tree, so the question is still in scope.' },
+      note: 'The definition below says “repr string”. Here that just means what Python shows when it evaluates a tree (like `Tree(2, [Tree(20)])`), so the question is still in scope.' },
     'sp25-3a': { status: 'note', source: 'ed',
       note: '`Event` defines `__repr__`, which is no longer taught. It only decides how events look in the tests; the rest of the question is in scope.' },
     'sp25-3b': { status: 'note', source: 'ed',
@@ -43,7 +45,9 @@ window.CS61A_SCOPE = {
     'fa23-3': { status: 'note', source: 'ed',
       note: 'This class defines `__str__`, which is no longer taught. Blank (f), which depends on it, has been removed; the other blanks are in scope.' },
     'fa22-1': { status: 'note', source: 'inferred',
-      note: '`Snake` defines `__str__`, which is no longer taught: printing a `Snake` shows its name.' },
+      note: '`Snake` defines `__str__`, which is no longer taught. All you need to know: printing a `Snake` shows its name.' },
+    'sp24-1': { status: 'note', source: 'ed',
+      note: 'The `shake` code mutates a linked list, which is out of scope, so the parts that use it were removed. The remaining part only uses `cruel`.' },
   },
 
   questions: {
@@ -58,8 +62,6 @@ window.CS61A_SCOPE = {
     'sp24-1b': { status: 'out', reason: 'Mutates a linked list', source: 'ed' },
     'sp24-1d': { status: 'out', reason: 'Orders of growth', source: 'ed' },
     'sp24-4aplus': { status: 'out', reason: 'Mutates a tree’s branches (A+ question)', source: 'ed' },
-    'sp24-1c': { status: 'note', source: 'ed',
-      note: 'The `shake` code mutates a linked list, which is out of scope. This part only uses `cruel`.' },
     // Fall 2023
     'fa23-3f': { status: 'out', reason: 'Answer choices use repr', source: 'ed' },
     'fa23-6c': { status: 'out', reason: 'Orders of growth', source: 'ed' },
@@ -67,6 +69,10 @@ window.CS61A_SCOPE = {
     'sp23-3a-iii': { status: 'out', reason: 'Orders of growth', source: 'ed' },
     'sp23-4e': { status: 'out', reason: 'Mutates a tree’s branches', source: 'ed' },
     // Fall 2022
+    'fa22-1c': { status: 'note', source: 'inferred',
+      note: 'The answer uses `__str__`: `print(snek)` shows the snake’s name.' },
+    'fa22-1d': { status: 'note', source: 'inferred',
+      note: 'The answer uses `__str__`: `f"{self} crawled"` puts the snake’s name in the string.' },
     'fa22-5b-i': { status: 'out', reason: 'Orders of growth', source: 'inferred' },
     'fa22-5b-ii': { status: 'out', reason: 'Orders of growth', source: 'inferred' },
     // Fall 2021
