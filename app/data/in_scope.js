@@ -37,7 +37,7 @@ window.CS61A_SCOPE = {
     'fa22-4b': { status: 'out', reason: 'Mutates a tree', source: 'inferred' },
 
     'fa25-3': { status: 'note', source: 'ed',
-      note: 'The definition below says “repr string”. Here that just means what Python shows when it evaluates a tree (like `Tree(2, [Tree(20)])`), so the question is still in scope.' },
+      note: 'The definition below says “repr string”. Here that just means what Python shows when it evaluates a tree (like `Tree(2, [Tree(20), Tree(22)])` on line 4), so the question is still in scope.' },
     'sp25-3a': { status: 'note', source: 'ed',
       note: 'The `Event` class defines a `__repr__` method, which is no longer taught. That method only decides how events look in the tests, so the rest of the question is in scope.' },
     'sp25-3b': { status: 'note', source: 'ed',
