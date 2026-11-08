@@ -54,6 +54,8 @@ window.CS61A_TOUR = (function () {
       html: '<p>Some past-exam questions use ideas that aren’t taught this semester. Parts that depend on them have been removed, so you won’t see them.</p><p>When a question is still in scope but touches one of those ideas, a yellow note like this one explains what you can ignore.</p>' },
     { id: 'annotate', find: one('#annot-bar'), title: 'Mark up the problem',
       html: () => `<p>Use these tools on the problem. Your marks are saved with this question.</p>${hooks.annTools()}` },
+    { id: 'notes', find: one('#annot-bar [data-ann="note"]'), title: 'Sticky notes', demo: 'note',
+      html: '<p>Click the note tool, then anywhere on the page, and pick a <b>blank note</b> or a <b>tree note</b>. Drag the top bar to move it (even to the right side) and the corner to resize it.</p><p>In a tree note, <b>+</b> adds a branch and <b>×</b> removes one.</p>' },
     { id: 'blanks', find: blankPair, title: 'Your answers fill the code',
       html: '<p>What you choose or type for a part on the right appears in its blank in the code on the left, so you can read your whole solution in place.</p><p>Click a blank in the code to jump to its part.</p>' },
     { id: 'run', find: one('#run-btn'), title: 'Run Code',
@@ -119,7 +121,7 @@ window.CS61A_TOUR = (function () {
     prefer = null;
     const html = typeof step.html === 'function' ? step.html() : step.html;
     const root = build(`<p class="tour-kicker">Tip</p><h2 id="tour-title">${step.title}</h2>${html}
-      ${step.demo ? '<div class="tour-demo" aria-hidden="true"></div>' : ''}
+      ${step.demo ? `<div class="tour-demo" data-demo="${step.demo}" aria-hidden="true"></div>` : ''}
       <div class="tour-actions"><button class="btn btn-ghost btn-sm tour-end" data-tour="end">End tutorial</button>${canBack ? '<button class="btn btn-sm" data-tour="back">Back</button>' : ''}<button class="btn btn-primary btn-sm" data-tour="next">${more ? 'Next' : 'Got it'}</button></div>`, 'tour-tip');
     root.dataset.step = step.id;
     const rings = targets.map(() => root.appendChild(Object.assign(document.createElement('div'), { className: 'tour-ring' })));
@@ -132,7 +134,7 @@ window.CS61A_TOUR = (function () {
     if (step.demo) play(step.demo, root.querySelector('.tour-demo'));
   }
 
-  // ── Diagram demos: a small looping animation inside the card, with a cursor that pulses on every click ──
+  // ── Demos (diagram tools, sticky notes): a small looping animation inside the card, with a cursor that pulses on every click ──
   const PACE = 0.5; // demo speed: every duration below is scaled by this (0.5 = twice as fast)
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms * PACE));
   const el = (parent, cls, x, y, html) => {
@@ -220,6 +222,64 @@ window.CS61A_TOUR = (function () {
         const target = [r.left - s.left, r.top - s.top + r.height / 2];
         await move([target[0] + 10, target[1]], 700, follow); await click();
         follow(target); line.classList.add('done'); // snapped onto the list
+      } else if (kind === 'note') {
+        // Two halves stand for the problem and the answers. Place a tree note, grow it to 6 → 4, 2, drag it across, resize.
+        const W = stage.clientWidth;
+        const half = Math.round(W / 2);
+        const t = tools(['hl', 'pen', 'eraser', 'note']);
+        el(stage, 'td-divider', half, 42);
+        el(stage, 'td-pane-label', 12, 46, 'problem');
+        el(stage, 'td-pane-label', half + 10, 46, 'answers');
+        const center = (node) => { const r = node.getBoundingClientRect(), b = stage.getBoundingClientRect(); return [r.left - b.left + r.width / 2, r.top - b.top + r.height / 2]; };
+        await sleep(400);
+        await move(center(t.note)); await click(); t.note.classList.add('on');
+        await move([46, 84]); await click();
+        const pick = el(stage, 'td-pick', 38, 78, '<span>Blank note</span><span>Tree note</span>');
+        await sleep(350);
+        await move(center(pick.lastChild), 450); await click();
+        pick.remove(); t.note.classList.remove('on');
+        let nx = 22;
+        let ny = 66;
+        let nw = 112;
+        let nh = 92;
+        const note = el(stage, 'td-note', nx, ny, `<div class="td-note-bar">Tree</div><svg class="td-note-ink"><defs><marker id="td-head-n" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z"/></marker></defs><g></g></svg><div class="td-grip"></div>`);
+        const nodes = [];
+        const R = 10;
+        const layout = () => {
+          Object.assign(note.style, { left: `${nx}px`, top: `${ny}px`, width: `${nw}px`, height: `${nh}px` });
+          const mid = nw / 2;
+          const kids = nodes.slice(1);
+          const xs = kids.length === 1 ? [mid] : [mid - 24, mid + 24];
+          const spot = (n, cx, cy) => Object.assign(n.style, { left: `${cx - R}px`, top: `${cy - R}px` });
+          if (nodes[0]) spot(nodes[0], mid, 32);
+          kids.forEach((k, i) => spot(k, xs[i], 70));
+          note.querySelector('.td-note-ink g').innerHTML = kids.map((k, i) => {
+            const dx = xs[i] - mid, dy = 38, len = Math.hypot(dx, dy);
+            return `<line x1="${mid + dx / len * R}" y1="${32 + dy / len * R}" x2="${xs[i] - dx / len * (R + 1)}" y2="${70 - dy / len * (R + 1)}"/>`;
+          }).join('');
+        };
+        const node = () => { const n = el(note, 'td-node', 0, 0, '<span class="td-lbl"></span>'); nodes.push(n); layout(); return n.firstChild; };
+        layout();
+        const root = node();
+        const plus = el(nodes[0], 'td-plus', 0, 0, '+');
+        await sleep(250);
+        await move(center(nodes[0]), 450); await click();
+        await type(root, '6');
+        nodes[0].classList.add('show');
+        for (const label of ['4', '2']) {
+          await move(center(plus), 420); await click();
+          await type(node(), label);
+        }
+        nodes[0].classList.remove('show');
+        // drag by the top bar across the divider, then resize from the corner
+        const grab = [nx + 30, ny + 7];
+        await move(grab, 450); await click();
+        await move([half + 14 + 30, ny + 14], 900, (p) => { nx = p[0] - 30; ny = p[1] - 7; layout(); });
+        await sleep(250);
+        await move([nx + nw - 4, ny + nh - 4], 450); await click();
+        const from = [nw, nh];
+        const corner = at.slice();
+        await move([corner[0] + 24, corner[1] + 12], 650, (p) => { nw = from[0] + p[0] - corner[0]; nh = from[1] + p[1] - corner[1]; layout(); });
       }
       await sleep(2400); // hold the finished result a moment before looping
     }

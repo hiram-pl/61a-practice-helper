@@ -541,6 +541,7 @@
   //   { id, kind: 'hl',   where: 'intro' | 'outro', start, end }    text-offset highlight in the prose
   //   { id, kind: 'code', from: {line, ch}, to: {line, ch} }         highlight inside the code editor
   //   { id, kind: 'pen',  block, pts: [[x, y], …] }                  freehand stroke, relative to a block
+  //   { id, kind: 'note', type, block, x, y, w, h, text | tree }      sticky note (see Sticky notes below)
   // Pen strokes are anchored to the block (paragraph, editor, …) they start on, so they move with it
   // when the layout changes. Undo/redo history is kept in memory per problem as lists of add/remove ops.
   const history = {}; // pid -> { undo: [ops], redo: [ops] }
@@ -637,15 +638,17 @@
       .map((a) => `<path d="${strokePath(absPoints(art, a))}" data-aid="${a.id}"/>`).join('');
     const livePath = drawing && drawing.kind === 'pen' ? `<path class="live" d="${strokePath(drawing.pts)}"/>` : '';
     svg.innerHTML = paths + livePath;
+    layoutNotes();
   }
 
   // Apply one annotation change to state and to whatever is on screen.
   function addAnn(pid, a) {
-    anns(pid).push(a);
+    anns(pid).push(a.kind === 'note' ? cloneAnn(a) : a); // notes are edited in place, so the list keeps its own copy
     if (a.kind === 'code') markCode(editors[pid], a);
     if (pid !== leftPid) return;
     if (a.kind === 'hl') renderProse(pid, a.where);
     if (a.kind === 'pen') layoutStrokes();
+    if (a.kind === 'note') renderNotes();
   }
   function removeAnn(pid, id) {
     const list = anns(pid);
@@ -657,6 +660,7 @@
     if (pid === leftPid) {
       if (a.kind === 'hl') renderProse(pid, a.where);
       if (a.kind === 'pen') layoutStrokes();
+      if (a.kind === 'note') renderNotes();
     }
     return a;
   }
@@ -793,7 +797,17 @@
     ui.annMode = ui.annMode === mode ? 'none' : mode;
     const art = article();
     if (art) art.dataset.mode = ui.annMode;
+    syncNoteMode();
     updateToolbar();
+  }
+  // The note layer follows the annotation tool: placing a note, drawing / erasing on notes, or highlighting in them.
+  function syncNoteMode() {
+    const layer = document.getElementById('note-layer');
+    if (!layer) return;
+    layer.classList.toggle('placing', ui.annMode === 'note');
+    layer.classList.toggle('inking', ui.annMode === 'pen' || ui.annMode === 'eraser');
+    layer.classList.toggle('erasing', ui.annMode === 'eraser');
+    layer.classList.toggle('highlighting', ui.annMode === 'hl');
   }
   function updateToolbar() {
     const bar = document.getElementById('annot-bar');
@@ -801,7 +815,7 @@
     const h = hist(leftPid);
     bar.querySelectorAll('[data-ann]').forEach((b) => {
       const k = b.dataset.ann;
-      if (['hl', 'pen', 'eraser'].includes(k)) b.setAttribute('aria-pressed', String(ui.annMode === k));
+      if (['hl', 'pen', 'eraser', 'note'].includes(k)) b.setAttribute('aria-pressed', String(ui.annMode === k));
       if (k === 'undo') b.disabled = !h.undo.length;
       if (k === 'redo') b.disabled = !h.redo.length;
       if (k === 'clear') b.disabled = !anns(leftPid).length;
@@ -813,6 +827,7 @@
         hl: 'Select text or code to highlight it.',
         pen: 'Draw with the mouse or trackpad. Scrolling still works.',
         eraser: 'Click or drag over a mark to erase it.',
+        note: 'Click where the sticky note should go.',
       }[ui.annMode];
     }
   }
@@ -865,6 +880,420 @@
     } else {
       record(leftPid, d.ops);
     }
+  }
+
+  // ── Sticky notes ──
+  // Stored with the other annotations as { id, kind: 'note', type: 'text' | 'tree', pane, x, y, w, h, text | tree }.
+  // Notes live in #note-layer, which covers both panes, so a note can sit anywhere and be dragged across the divider.
+  // Each note belongs to the pane its top-left corner is in ('left' or 'right'); x, y are in that pane's scrolling
+  // content, so the note scrolls with the problem or with the answers. A tree is { label, kids: [tree, …] }; a node is addressed by its path ('0' is the root, '0.1' its second
+  // branch). Every change is one undo step that swaps the old note for the new one. The list keeps its own copy of
+  // each note (addAnn clones), so history entries never change afterwards. Notes are drawn as HTML and rebuilt only
+  // when a change is applied: typing edits the stored note directly and is
+  // recorded as one step when the field loses focus (or before undo, redo, clear and leaving the question).
+  // Marks on a note belong to the note, so they move with it: `ink` is a list of red-pen strokes { id, pts } in the
+  // note body's scrolling content, `hls` are highlighted [start, end) ranges of a blank note's text (kept on their words
+  // while typing), and a tree node with `hl: true` is highlighted. Note highlights are blue, so they show on yellow.
+  const NOTE_MIN = { w: 150, h: 90 };
+  const NOTE_SIZE = { text: { w: 210, h: 140 }, tree: { w: 240, h: 170 } };
+  const NOTE_MAX_GROW = { w: 640, h: 520 }; // a growing tree enlarges its note up to this; beyond it, the note scrolls
+  const NOTE_BAR = 24;
+  const TN = { d: 34, gapX: 20, gapY: 46, pad: 18 }; // node diameter, space between leaves and between levels, padding
+  const cloneAnn = (a) => JSON.parse(JSON.stringify(a));
+  let noteEdit = null; // { pid, id, before } while a note's text or a node label is being typed
+  let noteDrag = null; // { id, kind: 'move' | 'size', el, start, orig, moved } while a note is dragged or resized
+  let notePick = null; // { x, y } in layer pixels while the Blank note / Tree note chooser is open
+  let noteInk = null;  // { id, kind: 'pen' | 'eraser', body, pts | before, changed } while drawing or erasing on a note
+
+  const noteLayer = () => document.getElementById('note-layer');
+  const noteById = (id) => anns(leftPid).find((a) => a.kind === 'note' && a.id === id);
+  const paneEl = (side) => document.getElementById(side === 'right' ? 'pane-right' : 'pane-left');
+  // The pane under a point given in layer pixels (the nearest one when the point is on neither).
+  function paneAt(x, y) {
+    const L = noteLayer().getBoundingClientRect();
+    const cx = L.left + x;
+    const cy = L.top + y;
+    const dist = (side) => {
+      const r = paneEl(side).getBoundingClientRect();
+      return Math.hypot(Math.max(r.left - cx, 0, cx - r.right), Math.max(r.top - cy, 0, cy - r.bottom));
+    };
+    return dist('right') < dist('left') ? 'right' : 'left';
+  }
+  function anchorAt(x, y) { // a point in layer pixels as { pane, x, y } in that pane's scrolling content
+    const pane = paneAt(x, y);
+    const L = noteLayer().getBoundingClientRect();
+    const el = paneEl(pane);
+    const r = el.getBoundingClientRect();
+    return { pane, x: Math.round(L.left + x - r.left + el.scrollLeft), y: Math.round(L.top + y - r.top + el.scrollTop) };
+  }
+  function notePos(a) { // where a note is drawn now, in layer pixels
+    const L = noteLayer().getBoundingClientRect();
+    const el = paneEl(a.pane);
+    const r = el.getBoundingClientRect();
+    return [Math.round(r.left - L.left + a.x - el.scrollLeft), Math.round(r.top - L.top + a.y - el.scrollTop)];
+  }
+  function nodeAt(tree, path) {
+    return path.split('.').slice(1).reduce((t, i) => (t && t.kids ? t.kids[Number(i)] : null), tree);
+  }
+
+  // Tidy layout: leaves left to right, each parent centered over its first and last branch.
+  function treeLayout(tree) {
+    const nodes = [];
+    const edges = [];
+    let leaves = 0;
+    let depth = 0;
+    (function walk(t, path, d) {
+      depth = Math.max(depth, d);
+      const kids = (t.kids || []).map((k, i) => walk(k, `${path}.${i}`, d + 1));
+      const x = kids.length ? (kids[0].x + kids[kids.length - 1].x) / 2 : TN.pad + TN.d / 2 + (leaves++) * (TN.d + TN.gapX);
+      const n = { t, path, x, y: TN.pad + TN.d / 2 + d * (TN.d + TN.gapY) };
+      nodes.push(n);
+      kids.forEach((k) => edges.push([n, k]));
+      return n;
+    })(tree, '0', 0);
+    return { nodes, edges, w: 2 * TN.pad + leaves * (TN.d + TN.gapX) - TN.gapX, h: 2 * TN.pad + TN.d + depth * (TN.d + TN.gapY) };
+  }
+  function edgeHTML([p, c], marker) {
+    const dx = c.x - p.x;
+    const dy = c.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const r = TN.d / 2;
+    const f = (v) => Math.round(v * 10) / 10;
+    return `<line x1="${f(p.x + dx / len * r)}" y1="${f(p.y + dy / len * r)}" x2="${f(c.x - dx / len * (r + 1))}" y2="${f(c.y - dy / len * (r + 1))}" marker-end="url(#${marker})"/>`;
+  }
+  function treeHTML(a) {
+    const L = treeLayout(a.tree);
+    const marker = `tn-arrow-${a.id}`;
+    const single = !a.tree.kids.length;
+    return `${single ? '<p class="tree-hint">Type a label. Point at a node: <b>+</b> adds a branch, <b>×</b> removes it.</p>' : ''}
+      <div class="tree-canvas" style="width:${L.w}px;height:${L.h}px">
+        <svg class="tree-edges" width="${L.w}" height="${L.h}" aria-hidden="true"><defs><marker id="${marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs>${L.edges.map((e) => edgeHTML(e, marker)).join('')}</svg>
+        ${L.nodes.map((n) => `<div class="tnode" data-path="${n.path}" style="left:${n.x - TN.d / 2}px;top:${n.y - TN.d / 2}px">
+          <input class="tnode-input${n.t.hl ? ' hl' : ''}" data-path="${n.path}" value="${esc(n.t.label)}" aria-label="${n.path === '0' ? 'Root label' : `Label of node ${esc(n.path.slice(2))}`}" autocomplete="off" spellcheck="false">
+          <button type="button" class="tnode-btn tnode-add" data-tn="add" title="Add a branch" aria-label="Add a branch">+</button>
+          ${n.path === '0' ? '' : '<button type="button" class="tnode-btn tnode-del" data-tn="del" title="Remove this node and everything below it" aria-label="Remove this node and everything below it">×</button>'}
+        </div>`).join('')}
+      </div>`;
+  }
+  function noteHTML(a) {
+    const tree = a.type === 'tree';
+    return `<div class="snote${tree ? ' snote-tree' : ''}" data-aid="${a.id}" role="group" aria-label="${tree ? 'Tree sticky note' : 'Sticky note'}">
+        <div class="snote-bar" data-nd="move" title="Drag to move"><span class="snote-title">${tree ? 'Tree' : 'Note'}</span><button type="button" class="snote-x" data-nd="delete" title="Delete this note" aria-label="Delete this note">×</button></div>
+        <div class="snote-body">${tree ? treeHTML(a) : `<div class="snote-textwrap"><div class="snote-mirror" aria-hidden="true">${mirrorHTML(a)}</div><textarea class="snote-text" aria-label="Note text" placeholder="Type a note…" spellcheck="false">${esc(a.text)}</textarea></div>`}<svg class="snote-ink" aria-hidden="true">${inkHTML(a)}</svg></div>
+        <div class="snote-size" data-nd="size" title="Drag to resize"></div>
+      </div>`;
+  }
+  const notePickHTML = () => `<div class="note-pick" role="dialog" aria-label="New sticky note" style="left:${notePick.x}px;top:${notePick.y}px">
+      <span class="note-pick-title">New sticky note</span>
+      <button type="button" class="btn btn-sm" data-nd="new-text">Blank note</button>
+      <button type="button" class="btn btn-sm" data-nd="new-tree">Tree note</button>
+      <button type="button" class="link" data-nd="cancel">Cancel</button>
+    </div>`;
+  function renderNotes() {
+    const layer = noteLayer();
+    if (!layer || !leftPid) return;
+    layer.innerHTML = anns(leftPid).filter((a) => a.kind === 'note').map(noteHTML).join('') + (notePick ? notePickHTML() : '');
+    syncNoteMode();
+    layoutNotes();
+    layer.querySelectorAll('.snote-text').forEach(fitText);
+  }
+  const inkHTML = (a) => (a.ink || []).map((k) => `<path d="${strokePath(k.pts)}"/>`).join('');
+  // The text again, behind the (transparent) text box, with the highlighted ranges marked. A trailing zero-width
+  // space keeps a final empty line the same height as in the text box.
+  function mirrorHTML(a) {
+    const text = a.text || '';
+    let out = '';
+    let at = 0;
+    (a.hls || []).slice().sort((x, y) => x[0] - y[0]).forEach(([s0, e0], i) => {
+      if (s0 < at) return;
+      out += esc(text.slice(at, s0)) + `<mark data-i="${i}">${esc(text.slice(s0, e0))}</mark>`;
+      at = e0;
+    });
+    return `${out}${esc(text.slice(at))}\u200b`;
+  }
+  // The text box grows with its text (the note body scrolls instead), so the mirror and drawings scroll with it.
+  function fitText(ta) {
+    const body = ta.closest('.snote-body');
+    ta.style.height = '0px';
+    ta.style.height = `${Math.max(ta.scrollHeight, body ? body.clientHeight : 0)}px`;
+  }
+  // Keep highlights on their words when the text changes: find what was replaced, shift what is after it,
+  // and drop a highlight whose words are all gone.
+  function shiftHls(hls, before, after) {
+    if (!hls || !hls.length) return hls;
+    let p = 0;
+    while (p < before.length && p < after.length && before[p] === after[p]) p++;
+    let q = 0;
+    while (q < before.length - p && q < after.length - p && before[before.length - 1 - q] === after[after.length - 1 - q]) q++;
+    const oldEnd = before.length - q;
+    const delta = after.length - before.length;
+    const added = after.length - q - p;
+    return hls.map(([s0, e0]) => [
+      s0 < p ? s0 : s0 >= oldEnd ? s0 + delta : p + added,
+      e0 <= p ? e0 : e0 >= oldEnd ? e0 + delta : p,
+    ]).filter(([s0, e0]) => e0 > s0);
+  }
+  function mergeHls(hls) {
+    const out = [];
+    hls.slice().sort((x, y) => x[0] - y[0]).forEach(([s0, e0]) => {
+      const last = out[out.length - 1];
+      if (last && s0 <= last[1]) last[1] = Math.max(last[1], e0); else out.push([s0, e0]);
+    });
+    return out;
+  }
+  function layoutNotes() {
+    const layer = noteLayer();
+    if (!layer || !leftPid) return;
+    anns(leftPid).filter((a) => a.kind === 'note').forEach((a) => {
+      const el = layer.querySelector(`.snote[data-aid="${a.id}"]`);
+      if (!el || (noteDrag && noteDrag.id === a.id)) return;
+      const [x, y] = notePos(a);
+      Object.assign(el.style, { left: `${x}px`, top: `${y}px`, width: `${a.w}px`, height: `${a.h}px` });
+    });
+  }
+  function focusNote(id, path) {
+    const el = noteLayer() && noteLayer().querySelector(`.snote[data-aid="${id}"]`);
+    const f = el && (path ? el.querySelector(`.tnode-input[data-path="${path}"]`) : el.querySelector('.snote-text'));
+    if (f) f.focus({ preventScroll: true });
+  }
+  function flushNoteEdit() {
+    if (!noteEdit) return;
+    const { pid, id, before } = noteEdit;
+    noteEdit = null;
+    const live = anns(pid).find((a) => a.id === id);
+    if (live && JSON.stringify(live) !== JSON.stringify(before)) record(pid, [{ op: 'remove', ann: before }, { op: 'add', ann: cloneAnn(live) }]);
+  }
+  // Apply a change to a copy of note `id` and record it as one step.
+  function changeNote(id, fn) {
+    flushNoteEdit();
+    const live = noteById(id);
+    if (!live) return null;
+    const after = cloneAnn(live);
+    const out = fn(after);
+    commit(leftPid, [{ op: 'remove', ann: cloneAnn(live) }, { op: 'add', ann: after }]);
+    return out;
+  }
+  function growToTree(a) { // a bigger tree enlarges its note (up to a limit) instead of hiding behind a scrollbar
+    const L = treeLayout(a.tree);
+    a.w = Math.max(a.w, Math.min(L.w + 4, NOTE_MAX_GROW.w));
+    a.h = Math.max(a.h, Math.min(L.h + NOTE_BAR + 6, NOTE_MAX_GROW.h));
+  }
+  function openNotePick(x, y) {
+    const layer = noteLayer();
+    notePick = { x: Math.max(4, Math.min(x, layer.clientWidth - 330)), y: Math.max(4, Math.min(y, layer.clientHeight - 50)) };
+    setAnnMode('none');
+    renderNotes();
+    const b = noteLayer().querySelector('[data-nd="new-text"]');
+    if (b) b.focus({ preventScroll: true });
+  }
+  function closeNotePick() {
+    if (!notePick) return false;
+    notePick = null;
+    renderNotes();
+    return true;
+  }
+  function createNote(type) {
+    const layer = noteLayer();
+    if (!layer || !notePick) return;
+    const size = NOTE_SIZE[type];
+    const x = Math.max(0, Math.min(notePick.x, layer.clientWidth - size.w));
+    const y = Math.max(0, Math.min(notePick.y, layer.clientHeight - size.h));
+    const a = Object.assign({ id: newId(), kind: 'note', type }, anchorAt(x, y), size,
+      type === 'tree' ? { tree: { label: '', kids: [] } } : { text: '' });
+    notePick = null;
+    commit(leftPid, [{ op: 'add', ann: a }]);
+    focusNote(a.id, type === 'tree' ? '0' : null);
+    announce(type === 'tree' ? 'Tree note added. Type the root label; + adds a branch.' : 'Note added.');
+  }
+
+  function onNoteClick(e) {
+    const node = ui.annMode === 'hl' && e.target.closest('.tnode-input');
+    if (node) { // highlighter on: a click highlights the whole node, or takes the highlight off
+      const path = node.dataset.path;
+      let on = false;
+      changeNote(node.closest('.snote').dataset.aid, (a) => { const n = nodeAt(a.tree, path); on = n.hl = !n.hl; if (!on) delete n.hl; });
+      announce(on ? 'Node highlighted.' : 'Highlight removed.');
+      return;
+    }
+    const b = e.target.closest('[data-nd], [data-tn]');
+    if (!b) return;
+    const k = b.dataset.nd || b.dataset.tn;
+    if (k === 'new-text' || k === 'new-tree') { createNote(k === 'new-text' ? 'text' : 'tree'); return; }
+    if (k === 'cancel') { closeNotePick(); return; }
+    const note = b.closest('.snote');
+    if (!note) return;
+    const id = note.dataset.aid;
+    if (k === 'delete') {
+      flushNoteEdit();
+      const live = noteById(id);
+      if (live) { commit(leftPid, [{ op: 'remove', ann: live }]); announce('Note deleted. Use Undo to bring it back.'); }
+    } else if (k === 'add') {
+      const path = b.closest('.tnode').dataset.path;
+      const focus = changeNote(id, (a) => { const n = nodeAt(a.tree, path); n.kids.push({ label: '', kids: [] }); growToTree(a); return `${path}.${n.kids.length - 1}`; });
+      if (focus) focusNote(id, focus);
+    } else if (k === 'del') {
+      const path = b.closest('.tnode').dataset.path;
+      const parent = path.slice(0, path.lastIndexOf('.'));
+      changeNote(id, (a) => { nodeAt(a.tree, parent).kids.splice(Number(path.slice(path.lastIndexOf('.') + 1)), 1); });
+      focusNote(id, parent);
+      announce('Branch removed. Use Undo to bring it back.');
+    }
+  }
+  function onNoteInput(e) {
+    const el = e.target;
+    const note = el.closest('.snote');
+    const live = note && noteById(note.dataset.aid);
+    if (!live) return;
+    if (!noteEdit || noteEdit.id !== live.id) { flushNoteEdit(); noteEdit = { pid: leftPid, id: live.id, before: cloneAnn(live) }; }
+    if (el.classList.contains('snote-text')) {
+      live.hls = shiftHls(live.hls, live.text || '', el.value);
+      if (live.hls && !live.hls.length) delete live.hls;
+      live.text = el.value;
+      el.previousElementSibling.innerHTML = mirrorHTML(live);
+      fitText(el);
+    } else if (el.classList.contains('tnode-input')) { const n = nodeAt(live.tree, el.dataset.path); if (n) n.label = el.value; }
+    saveSoon();
+  }
+  function onNoteSelect(e) { // highlighter on: selecting text in a blank note highlights it
+    const ta = e.target;
+    if (ui.annMode !== 'hl' || !ta.matches || !ta.matches('.snote-text') || ta.selectionEnd <= ta.selectionStart) return;
+    const range = [ta.selectionStart, ta.selectionEnd];
+    changeNote(ta.closest('.snote').dataset.aid, (a) => { a.hls = mergeHls([...(a.hls || []), range]); });
+  }
+  function onNoteKey(e) {
+    if (e.key === 'Escape' && e.target.closest('.snote')) { e.target.blur(); e.stopPropagation(); }
+    if (e.key === 'Escape' && notePick) { closeNotePick(); e.stopPropagation(); }
+  }
+  function inkPoint(body, e) {
+    const r = body.getBoundingClientRect();
+    return [Math.round((e.clientX - r.left + body.scrollLeft) * 10) / 10, Math.round((e.clientY - r.top + body.scrollTop) * 10) / 10];
+  }
+  // Erase what is under the pointer on note `live`: strokes, highlighted text, highlighted nodes. Updates the note in
+  // place (the drag keeps its pointer capture); the whole drag is recorded as one step on release.
+  function eraseOnNote(live, body, e) {
+    const [x, y] = inkPoint(body, e);
+    let hit = false;
+    const near = (k) => (k.pts.length === 1 ? Math.hypot(x - k.pts[0][0], y - k.pts[0][1]) < 9 : k.pts.some((pt, i) => i && distToSegment(x, y, k.pts[i - 1], pt) < 9));
+    if ((live.ink || []).some(near)) { live.ink = live.ink.filter((k) => !near(k)); hit = true; }
+    const inRect = (el) => [...el.getClientRects()].some((r) => e.clientX >= r.left - 2 && e.clientX <= r.right + 2 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2);
+    const marks = [...body.querySelectorAll('.snote-mirror mark')].filter(inRect).map((m) => Number(m.dataset.i));
+    if (marks.length) { live.hls = live.hls.filter((h, i) => !marks.includes(i)); hit = true; }
+    body.querySelectorAll('.tnode-input.hl').forEach((inp) => {
+      const n = inRect(inp) && nodeAt(live.tree, inp.dataset.path);
+      if (n) { delete n.hl; inp.classList.remove('hl'); hit = true; }
+    });
+    if (!hit) return;
+    noteInk.changed = true;
+    if (live.ink && !live.ink.length) delete live.ink;
+    if (live.hls && !live.hls.length) delete live.hls;
+    body.querySelector('.snote-ink').innerHTML = inkHTML(live);
+    const mirror = body.querySelector('.snote-mirror');
+    if (mirror) mirror.innerHTML = mirrorHTML(live);
+  }
+  function onNoteDown(e) {
+    if (ui.annMode === 'pen' || ui.annMode === 'eraser') { // drawing or erasing on a note instead of moving it
+      const sn = e.target.closest('.snote');
+      const live = sn && noteById(sn.dataset.aid);
+      if (!live || e.button !== 0) return;
+      e.preventDefault();
+      flushNoteEdit();
+      if (sn.setPointerCapture) sn.setPointerCapture(e.pointerId);
+      const body = sn.querySelector('.snote-body');
+      if (ui.annMode === 'pen') {
+        noteInk = { id: live.id, kind: 'pen', body, pts: [inkPoint(body, e)] };
+        body.querySelector('.snote-ink').insertAdjacentHTML('beforeend', `<path class="live" d="${strokePath(noteInk.pts)}"/>`);
+      } else {
+        noteInk = { id: live.id, kind: 'eraser', body, before: cloneAnn(live), changed: false };
+        eraseOnNote(live, body, e);
+      }
+      return;
+    }
+    const h = e.target.closest('[data-nd="move"], [data-nd="size"]');
+    if (!h || e.button !== 0 || e.target.closest('.snote-x')) return;
+    const el = h.closest('.snote');
+    if (!noteById(el.dataset.aid)) return;
+    e.preventDefault();
+    flushNoteEdit();
+    if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur();
+    if (h.setPointerCapture) h.setPointerCapture(e.pointerId);
+    noteDrag = { id: el.dataset.aid, kind: h.dataset.nd, el, start: [e.clientX, e.clientY], moved: false,
+      orig: { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } };
+    el.classList.add('dragging');
+  }
+  function onNoteMove(e) {
+    if (noteInk) {
+      const k = noteInk;
+      if (k.kind === 'pen') {
+        const pt = inkPoint(k.body, e);
+        const last = k.pts[k.pts.length - 1];
+        if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 1.5) return;
+        k.pts.push(pt);
+        const lp = k.body.querySelector('.snote-ink path.live');
+        if (lp) lp.setAttribute('d', strokePath(k.pts));
+      } else {
+        const live = noteById(k.id);
+        if (live) eraseOnNote(live, k.body, e);
+      }
+      return;
+    }
+    const d = noteDrag;
+    if (!d) return;
+    const dx = e.clientX - d.start[0];
+    const dy = e.clientY - d.start[1];
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+    if (d.kind === 'move') { // anywhere in the work area, keeping the top bar on screen
+      const layer = noteLayer();
+      d.el.style.left = `${Math.round(Math.max(0, Math.min(d.orig.x + dx, layer.clientWidth - 60)))}px`;
+      d.el.style.top = `${Math.round(Math.max(0, Math.min(d.orig.y + dy, layer.clientHeight - NOTE_BAR)))}px`;
+    } else {
+      d.el.style.width = `${Math.round(Math.max(NOTE_MIN.w, d.orig.w + dx))}px`;
+      d.el.style.height = `${Math.round(Math.max(NOTE_MIN.h, d.orig.h + dy))}px`;
+    }
+  }
+  function onNoteUp() {
+    if (noteInk) {
+      const k = noteInk;
+      noteInk = null;
+      const live = noteById(k.id);
+      if (!live) return;
+      if (k.kind === 'pen') changeNote(k.id, (a) => { a.ink = [...(a.ink || []), { id: newId(), pts: k.pts }]; });
+      else if (k.changed) { record(leftPid, [{ op: 'remove', ann: k.before }, { op: 'add', ann: cloneAnn(live) }]); renderNotes(); }
+      return;
+    }
+    const d = noteDrag;
+    if (!d) return;
+    noteDrag = null;
+    d.el.classList.remove('dragging');
+    if (!d.moved || !noteById(d.id)) { layoutNotes(); return; }
+    changeNote(d.id, (a) => {
+      if (d.kind === 'move') Object.assign(a, anchorAt(d.el.offsetLeft, d.el.offsetTop));
+      else { a.w = d.el.offsetWidth; a.h = d.el.offsetHeight; }
+    });
+  }
+  // With the note tool on, the layer takes the click (on either pane) and opens the chooser there.
+  function onLayerDown(e) {
+    if (ui.annMode !== 'note' || e.button !== 0 || e.target !== noteLayer()) return;
+    e.preventDefault();
+    const L = noteLayer().getBoundingClientRect();
+    openNotePick(e.clientX - L.left, e.clientY - L.top);
+  }
+  // The layer and both panes belong to the practice screen and outlive a question, so they are wired once each.
+  function wireNotes() {
+    const layer = noteLayer();
+    if (!layer || layer.dataset.wired) return;
+    layer.dataset.wired = '1';
+    ['pane-left', 'pane-right'].forEach((id) => document.getElementById(id).addEventListener('scroll', layoutNotes, { passive: true }));
+    layer.addEventListener('pointerdown', onLayerDown);
+    layer.addEventListener('click', onNoteClick);
+    layer.addEventListener('input', onNoteInput);
+    layer.addEventListener('focusout', (e) => { if (e.target.matches('.snote-text, .tnode-input')) flushNoteEdit(); });
+    layer.addEventListener('keydown', onNoteKey);
+    layer.addEventListener('mouseup', onNoteSelect);
+    layer.addEventListener('keyup', onNoteSelect);
+    layer.addEventListener('pointerdown', onNoteDown);
+    layer.addEventListener('pointermove', onNoteMove);
+    layer.addEventListener('pointerup', onNoteUp);
+    layer.addEventListener('pointercancel', onNoteUp);
   }
 
   // ───────────────────────────── Diagram workspace (right pane) ─────────────────────────────
@@ -1931,6 +2360,7 @@
     hl:'<path d="M4 15l3 3M5 16l8.5-8.5 3 3L8 19H5z" /><path d="M13.5 7.5l2-2 3 3-2 2" /><path d="M3 21h8" stroke="#e9c400" stroke-width="3"/>',
     pen: '<path d="M4 20l1-4L16 5l3 3L8 19z" /><path d="M14 7l3 3" />',
     eraser: '<path d="M8 20h11" /><path d="M5 15l8-9 6 6-6 7H9z" /><path d="M9 11l6 6" />',
+    note: '<path d="M4 4h16v10l-6 6H4z" /><path d="M14 20v-6h6" /><path d="M8 9h8M8 12.5h4" />',
     undo: '<path d="M9 7L5 11l4 4" /><path d="M5 11h9a5 5 0 010 10h-3" />',
     redo: '<path d="M15 7l4 4-4 4" /><path d="M19 11h-9a5 5 0 000 10h3" />',
     clear: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />',
@@ -1961,6 +2391,7 @@
         ${tool('hl', 'Highlighter (select text)', 'aria-pressed="false"')}
         ${tool('pen', 'Red pen', 'aria-pressed="false"')}
         ${tool('eraser', 'Eraser', 'aria-pressed="false"')}
+        ${tool('note', 'Sticky note', 'aria-pressed="false"')}
         <span class="ann-sep" aria-hidden="true"></span>
         ${tool('undo', 'Undo')}${tool('redo', 'Redo')}
         ${tool('clear', 'Clear all annotations')}
@@ -2181,6 +2612,9 @@
   // the text selection and the scroll position are never wiped by ordinary re-renders.
   function buildLeft(g) {
     const pane = document.getElementById('pane-left');
+    flushNoteEdit(); // typing in a note of the question being left
+    notePick = null;
+    noteDrag = null;
     detachEditors();
     if (leftObserver) leftObserver.disconnect();
     pane.innerHTML = renderLeft(g);
@@ -2190,6 +2624,8 @@
     renderProse(g.pid, 'intro');
     renderProse(g.pid, 'outro');
     layoutStrokes();
+    renderNotes();
+    wireNotes();
     buildDiagram(g);
     const art = article();
     const svg = art.querySelector('.annot-layer');
@@ -2418,6 +2854,7 @@
     ['hl', 'Highlighter', 'Select text or code to highlight what matters.'],
     ['pen', 'Red pen', 'Draw or write on the problem.'],
     ['eraser', 'Eraser', 'Click or drag over a mark to remove it.'],
+    ['note', 'Sticky note', 'Click where it should go, then pick a blank note or a tree note. Drag its top bar to move it and its corner to resize it.'],
     ['undo', 'Undo', 'Take back your last change.'],
     ['redo', 'Redo', 'Bring back what you undid.'],
     ['clear', 'Clear', 'Remove every mark on this question.'],
@@ -2495,6 +2932,7 @@
       <div class="p-main">
         <div class="pane pane-left" id="pane-left"></div>
         <div class="pane pane-right" id="pane-right"><div id="diagram-slot"></div><div id="right-body"></div></div>
+        <div class="note-layer" id="note-layer"></div>
       </div>
       <footer class="p-footer${isExam(s) ? ' exam' : ''}" id="p-footer">${footerHTML(s)}</footer>
     </div>`;
@@ -2990,21 +3428,22 @@
     const k = b.dataset.ann;
     if (k === 'hl') {
       if (highlightSelection()) { if (ui.annMode !== 'hl') setAnnMode('hl'); } else setAnnMode('hl');
-    } else if (k === 'pen' || k === 'eraser') setAnnMode(k);
+    } else if (k === 'pen' || k === 'eraser' || k === 'note') { closeNotePick(); setAnnMode(k); }
     else if (k === 'settings') setSettingsOpen(document.getElementById('exam-settings').hidden);
     else if (k === 'autofill') toggleAutoFill();
-    else if (k === 'undo') undo(leftPid);
-    else if (k === 'redo') redo(leftPid);
+    else if (k === 'undo') { flushNoteEdit(); undo(leftPid); }
+    else if (k === 'redo') { flushNoteEdit(); redo(leftPid); }
     else if (k === 'clear') {
+      flushNoteEdit();
       const list = anns(leftPid);
-      if (!list.length || !confirm('Clear all highlights and drawings for this question?')) return;
+      if (!list.length || !confirm('Clear all highlights, drawings and sticky notes for this question?')) return;
       commit(leftPid, list.slice().map((a) => ({ op: 'remove', ann: a })));
       announce('Annotations cleared. Use Undo to restore them.');
     }
   });
   // In highlighter mode, finishing a selection in the left pane highlights it.
   document.addEventListener('mouseup', (e) => {
-    if (ui.annMode !== 'hl' || !leftPid || !e.target.closest || !e.target.closest('#problem-article')) return;
+    if (ui.annMode !== 'hl' || !leftPid || !e.target.closest || !e.target.closest('#problem-article') || e.target.closest('.note-layer')) return;
     setTimeout(highlightSelection, 0); // let the selection (DOM or CodeMirror) settle first
   });
 
@@ -3110,6 +3549,7 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && settingsOpen()) { setSettingsOpen(false, true); return; }
+    if (e.key === 'Escape' && closeNotePick()) return;
     if (e.key === 'Escape') {
       if (ui.navOpen || ui.dirOpen || ui.confirmReveal || ui.menu) {
         const wasNav = ui.navOpen;
