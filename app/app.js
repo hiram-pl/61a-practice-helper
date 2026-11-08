@@ -194,7 +194,7 @@
   // A saved pick can be a question that is now wholly out of scope; drop it so it can't start an empty group.
   store.examPrefs.picked = [...new Set(store.examPrefs.picked)].filter((pid) => PROBLEMS[pid] && QUESTIONS.some((q) => q.problem === pid));
   // view: which session the question screen shows. 'practice' | 'exam' (in progress) | 'review' (a submitted attempt)
-  const ui = { screen: 'landing', view: 'practice', attemptId: null, menu: null, navOpen: false, dirOpen: false, hideClock: false, confirmReveal: null, annMode: 'none', examQuery: '', sizeDraft: null };
+  const ui = { screen: 'landing', view: 'practice', attemptId: null, menu: null, navOpen: false, dirOpen: false, hideClock: false, confirmReveal: null, annMode: 'none', examQuery: '', sizeDraft: null, walkCollapsed: false };
 
   const attemptById = (id) => store.attempts.find((a) => a.id === id) || null;
   function cur() {
@@ -2369,6 +2369,9 @@
     list: '<path d="M2 8h20v8H2zM9 8v8M15 8v8" />',
     del: '<path d="M6 6l12 12M18 6L6 18" />',
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
+    play: '<rect class="yt-box" x="1.5" y="4.5" width="21" height="15" rx="4.5" /><path class="yt-tri" d="M10 8.6v6.8l5.8-3.4z" />', // YouTube-style play mark (monochrome)
+    video: '<rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10.5l5-3v9l-5-3z" />',
+    chev: '<path d="M6 9l6 6 6-6" />',
     msg: '<path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />',
     tour: '<circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" />',
     more: '<circle cx="12" cy="5.5" r="1.3" fill="currentColor" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /><circle cx="12" cy="18.5" r="1.3" fill="currentColor" />',
@@ -2938,6 +2941,38 @@
     </div>`;
   }
 
+  // ── Walkthrough videos (data/walkthroughs.js): one YouTube playlist per past exam, found from a question's own
+  // exam (PROBLEMS[pid].exam), never from its position. Only on Practice Summary and Exam Results, never mid-exam.
+  function playlistFor(examId) {
+    const w = window.CS61A_WALKTHROUGHS;
+    return w && typeof w.getWalkthroughPlaylist === 'function' ? w.getWalkthroughPlaylist(examId) : null;
+  }
+  function walkLinkHTML(examId) {
+    const url = playlistFor(examId);
+    if (!url || !EXAMS[examId]) return '';
+    return `<a class="btn btn-sm btn-walk" href="${esc(url)}" target="_blank" rel="noopener noreferrer" data-exam="${esc(examId)}"
+      aria-label="Walkthrough: ${esc(EXAMS[examId].label)} video playlist on YouTube (opens in a new tab)">${icon('play')}Walkthrough</a>`;
+  }
+  // Practice Summary: one compact row per source exam that has a playlist, in question-bank exam order, with the
+  // number of distinct question groups (problems, not parts) from that exam in this set.
+  function walkSectionHTML(s) {
+    const groupsBy = {};
+    s.groups.forEach((g) => { const e = PROBLEMS[g.pid].exam; (groupsBy[e] = groupsBy[e] || new Set()).add(g.pid); });
+    const rows = Object.keys(EXAMS).filter((e) => groupsBy[e] && playlistFor(e)).map((e) => {
+      const n = groupsBy[e].size;
+      return `<li class="walk-row" data-exam="${esc(e)}"><span class="walk-ex">${esc(EXAMS[e].label)}<small>${n} question group${n === 1 ? '' : 's'} in this practice set</small></span>${walkLinkHTML(e)}</li>`;
+    }).join('');
+    if (!rows) return '';
+    const open = !ui.walkCollapsed;
+    return `<section class="walk-sec${open ? '' : ' collapsed'}" id="walk-sec" aria-labelledby="walk-toggle">
+        <h2 class="walk-h"><button class="walk-toggle" id="walk-toggle" data-action="toggle-walk" aria-expanded="${open}" aria-controls="walk-body">
+          <span class="walk-ic">${icon('video')}</span><span class="walk-title">Walkthrough Videos</span><span class="walk-chev">${icon('chev')}</span></button></h2>
+        <div class="walk-body" id="walk-body"${open ? '' : ' hidden'}>
+          <p class="walk-desc">Watch walkthrough playlists for the past exams included in your practice set.</p>
+          <ul class="walk-list">${rows}</ul>
+        </div>
+      </section>`;
+  }
   function renderResults() {
     const s = store.session;
     const counts = { correct: 0, incorrect: 0, ungraded: 0, skipped: 0 };
@@ -2973,6 +3008,7 @@
         <button class="btn" data-action="new-set">New set</button>
         <button class="btn btn-home" data-action="go-home">${icon('home')}Go to Home</button>
       </div>
+      ${walkSectionHTML(s)}
       <div class="result-list">${rows}</div>
       <p class="hint">Click a part to go back to it. Multiple-choice answers are graded automatically. For written answers, show the solution and grade yourself.</p>
       <p class="hint">All grades on this platform are for practice purposes only and do not predict your actual exam scores.</p>
@@ -3084,13 +3120,15 @@
         <button class="btn btn-sm" data-action="exam-review" data-i="${gi}" data-q="${id}" aria-label="Review question ${gi + 1} part ${esc(q.label)}">Review</button>
       </li>`;
     }).join('');
+    const full = a.kind === 'full'; // a full past exam gets one Walkthrough link, beside the Questions heading
     const groups = a.groups.map((g, gi) => {
       const pr = PROBLEMS[g.pid];
       const c = { correct: 0, incorrect: 0, skipped: 0, staff: 0 };
       g.ids.forEach((id) => { c[statusIn(a, id)]++; });
       const summary = ['correct', 'incorrect', 'skipped', 'staff'].filter((k) => c[k]).map((k) => `${c[k]} ${STATUS_LABEL[k].toLowerCase()}`).join(' · ');
-      return `<details class="rq-group"${c.incorrect ? ' open' : ''}>
-        <summary><span class="rq-n">${gi + 1}</span><span class="rq-title">${esc(pr.title)}<small>${esc(EXAMS[pr.exam].label)} · Q${esc(pr.number)} · ${g.ids.length} part${g.ids.length === 1 ? '' : 's'}</small></span><span class="rq-sum">${summary}</span></summary>
+      const walk = full ? '' : walkLinkHTML(pr.exam); // topic-based: each group links its own exam's playlist
+      return `<details class="rq-group${walk ? ' has-walk' : ''}"${c.incorrect ? ' open' : ''}>
+        <summary><span class="rq-n">${gi + 1}</span><span class="rq-title">${esc(pr.title)}<small>${esc(EXAMS[pr.exam].label)} · Q${esc(pr.number)} · ${g.ids.length} part${g.ids.length === 1 ? '' : 's'}</small></span><span class="rq-sum">${summary}</span>${walk ? `<span class="rq-walk">${walk}</span>` : ''}</summary>
         <ul class="part-rows">${rowsFor(g, gi)}</ul></details>`;
     }).join('');
     const excluded = [sc.staff ? `${sc.staff} part${sc.staff === 1 ? '' : 's'} graded by course staff` : '', sc.unknown ? `${sc.unknown} part${sc.unknown === 1 ? '' : 's'} without a published point value` : ''].filter(Boolean);
@@ -3120,7 +3158,7 @@
         <button class="btn" data-action="retake">Retake this exam</button>
         <button class="btn btn-home" data-action="go-home">${icon('home')}Go to Home</button>
       </div>
-      <h2 class="rq-h">Questions</h2>
+      <div class="rq-head"><h2 class="rq-h">Questions</h2>${full ? walkLinkHTML(a.examId) : ''}</div>
       <p class="hint">Counts are by part. Open a question to see its parts, then <b>Review</b> to work through it again next to the official answer.</p>
       <div class="rq-list">${groups}</div>
       ${renderInsights(a)}
@@ -3275,6 +3313,16 @@
       case 'go-home':
         if (ui.screen === 'exam-results' || isReview(s)) p.mode = 'exam'; // so Exam History is right there
         setView('practice'); ui.screen = 'home'; ui.navOpen = false; ui.dirOpen = false; window.scrollTo(0, 0); break;
+      case 'toggle-walk': { // Practice Summary → Walkthrough Videos (expanded by default)
+        ui.walkCollapsed = !ui.walkCollapsed;
+        const sec = document.getElementById('walk-sec');
+        if (sec) {
+          sec.classList.toggle('collapsed', ui.walkCollapsed);
+          document.getElementById('walk-body').hidden = ui.walkCollapsed;
+          btn.setAttribute('aria-expanded', String(!ui.walkCollapsed));
+        }
+        return;
+      }
       case 'new-set': // Practice Summary: home, with the practice setup showing
         p.mode = 'practice'; setView('practice'); ui.screen = 'home'; window.scrollTo(0, 0); break;
       case 'discard': if (!confirm('Discard your unfinished set? Your answers in it will be lost.')) return; store.session = null; break;
