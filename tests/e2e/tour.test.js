@@ -134,12 +134,26 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(second.join() === 'dg-icons,dg-value,dg-list,dg-arrow' && !second.includes('annotate') && !second.includes('mark'), `diagram question: only the new tips (${second.join(', ')})`);
   ok(!(await page.$('.tour')) && !(await page.$eval('#app', (a) => a.inert)), 'tips are cleared');
   await click(page, '#nav-toggle');
-  await click(page, '#nav-fa25-3'); // the first question with blanks in its code
+  await click(page, '#nav-fa25-3'); // the first question with blanks in its code, and with a scope note
   await wait(300);
-  ok(await step(page) === 'blanks', 'question with blanks: the answers-fill-the-code tip');
+  ok(await step(page) === 'scope', 'question with a scope note: the scope notes tip comes first');
+  const scopeTip = await page.evaluate(() => {
+    const ring = document.querySelector('.tour-ring').getBoundingClientRect(), note = document.querySelector('.scope-note').getBoundingClientRect();
+    return { around: ring.left <= note.left && ring.right >= note.right && ring.top <= note.top && ring.bottom >= note.bottom, text: document.querySelector('.tour-card').textContent };
+  });
+  ok(scopeTip.around && /aren’t taught this semester/.test(scopeTip.text) && /explains what you can ignore/.test(scopeTip.text) && !/on the left/.test(scopeTip.text),
+    'it outlines the scope note and explains why it is there');
+  await click(page, '[data-tour="next"]');
+  ok(await step(page) === 'blanks', 'question with blanks: then the answers-fill-the-code tip');
   const pair = await page.evaluate(() => [...document.querySelectorAll('.tour-ring')].map((r) => r.getBoundingClientRect().left));
   ok(pair.length === 2 && pair[0] < 700 && pair[1] > 700, 'it outlines a blank in the code and its answer on the right');
-  const third = await drain(page);
+  const third = ['scope', ...await drain(page)];
+  ok((await tourState(page)).seen.scope === true, 'the scope notes tip is remembered as seen');
+  await click(page, '#nav-toggle'); await click(page, '#nav-fa25-2'); await wait(200);
+  await click(page, '#nav-toggle'); await click(page, '#nav-fa25-3'); await wait(300);
+  ok(!(await step(page)), 'back on the noted question: the scope tip doesn’t repeat');
+  await page.reload(); await page.waitForSelector('#pane-right .part'); await wait(300);
+  ok(!(await step(page)) && await page.$('.scope-note'), 'after a reload: the note is still there, the tip doesn’t repeat');
   const shownInExam = new Set([...first, ...second, ...third]);
   await click(page, '.p-footer [data-action="submit-exam"]');
   await wait(300);
@@ -191,11 +205,24 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.waitForSelector('#pane-right .part');
   await wait(300);
   ok(!(await step(page)), 'after End tutorial: no tips on questions');
+  { // tour off: a question with a scope note shows the note but no tip
+    const off = await fresh();
+    await click(off, '[data-action="enter"]');
+    await click(off, '[data-tour="no"]');
+    await click(off, '#mode-exam');
+    await click(off, '#exam-id-fa25');
+    await click(off, '[data-action="start-exam"]');
+    await off.waitForSelector('#pane-right .part');
+    await click(off, '#nav-toggle'); await click(off, '#nav-fa25-3'); await wait(300);
+    ok(await off.$('.scope-note') && !(await step(off)), 'tour turned off (No thanks): a scope note shows, but no scope tip');
+    await off.close();
+  }
   await page.goto(APP_URL);
   await click(page, '[data-action="enter"]');
   ok(await page.$('[data-action="replay-tour"]'), 'home has a Replay the tutorial button');
   await click(page, '[data-action="replay-tour"]');
   ok(await step(page) === 'modes', 'Replay: the tips start over from the home tip');
+  ok(!(await tourState(page)).seen.scope, 'Replay: the scope notes tip will show again too');
   await page.keyboard.press('Escape');
   await wait(100);
   ok(!(await step(page)) && (await tourState(page)).seen.modes, 'Escape closes a tip like Got it');

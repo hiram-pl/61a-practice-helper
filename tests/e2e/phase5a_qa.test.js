@@ -1,6 +1,6 @@
 // Phase 5A: QA regression suite (fixed defects, grading audit, navigation, data integrity, Phase 6 readiness).
 const puppeteer = require('puppeteer-core');
-const { APP_URL, CHROME, skipTour } = require('./config');
+const { APP_URL, CHROME, skipTour, fullBank } = require('./config');
 const URL = APP_URL;
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
@@ -11,6 +11,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
   await skipTour(page);
+  await fullBank(page); // checks every transcribed part against the PDF, so scope is off
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -181,7 +182,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // ── §10 two tabs: a stale tab can no longer overwrite exam history ──
   await seed({ prefs: { mode: 'exam' }, examPrefs: { kind: 'custom', topics: [], picked: ['fa25-2'], timerOn: false, minutes: 120 } });
   await click('[data-action="enter"]'); await click('[data-action="start-exam"]'); await wait(300);
-  const tabB = await browser.newPage(); await skipTour(tabB); tabB.on('dialog', (d) => d.accept()); await tabB.setViewport({ width: 1400, height: 900 });
+  const tabB = await browser.newPage(); await skipTour(tabB); await fullBank(tabB); tabB.on('dialog', (d) => d.accept()); await tabB.setViewport({ width: 1400, height: 900 });
   await tabB.goto(URL); await tabB.waitForSelector('#ta-fa25-2a');
   await page.bringToFront(); await click('.p-footer [data-action="submit-exam"]'); await page.waitForSelector('.exam-results'); await wait(300);
   const n1 = (await st()).attempts.length;

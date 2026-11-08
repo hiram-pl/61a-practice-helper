@@ -17,4 +17,10 @@ module.exports = {
   skipTour: (page) => page.evaluateOnNewDocument(() => {
     try { if (!localStorage.getItem('cs61a-practice:tour')) localStorage.setItem('cs61a-practice:tour', '{"asked":true,"on":false,"seen":{}}'); } catch (e) { /* no storage */ }
   }),
+  // Load the app without this semester's scope (app/data/in_scope.js), so every transcribed question is offered.
+  // Suites that check an exam against its PDF (all parts, points, official answers) use this; in_scope.test.js
+  // covers what the scope hides and notes.
+  fullBank: (page) => page.evaluateOnNewDocument(() => {
+    Object.defineProperty(window, 'CS61A_SCOPE', { configurable: true, get: () => undefined, set: () => {} });
+  }),
 };
