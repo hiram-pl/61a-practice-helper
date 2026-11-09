@@ -2102,9 +2102,8 @@
       ${open ? `<div class="dd-panel" role="group" aria-label="${esc(label)}">${body}</div>` : ''}
     </div>`;
   }
-  const OUT_OF_SCOPE_LABEL = 'Not in scope for this semester';
-  function optRow(type, pref, value, label, on, extra, disabled, cls) {
-    return `<label class="dd-opt${disabled ? ' disabled' : ''}${cls ? ` ${cls}` : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+  function optRow(type, pref, value, label, on, extra, disabled) {
+    return `<label class="dd-opt${disabled ? ' disabled' : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
       <span class="dd-txt">${esc(label)}</span>${extra ? `<span class="dd-extra">${extra}</span>` : ''}</label>`;
   }
   function summarize(selected, all, nameOf, allLabel) {
@@ -2176,8 +2175,7 @@
 
     const topicName = (id) => TOPICS.find((t) => t.id === id).name;
     const topicsBody = `<div class="dd-tools"><button class="link" data-action="topics-all">Select all</button><button class="link" data-action="topics-none">Clear</button></div>
-      <div class="dd-list cols">${TOPICS.map((t) => {
-        if (OUT_TOPICS.has(t.id)) return optRow('checkbox', 'topics', t.id, t.name, false, OUT_OF_SCOPE_LABEL, true, 'out-of-scope');
+      <div class="dd-list cols">${TOPICS.filter((t) => !OUT_TOPICS.has(t.id)).map((t) => {
         const count = problemsOf(base.filter((q) => q.topics.includes(t.id))).length;
         return optRow('checkbox', 'topics', t.id, t.name, p.topics.includes(t.id), count ? String(count) : 'soon', !count);
       }).join('')}</div>
@@ -2298,9 +2296,7 @@
     } else {
       const avail = TOPICS.filter((t) => Object.keys(PROBLEMS).some((pid) => groupTopics(pid).includes(t.id)));
       config = `<div class="chips" role="group" aria-label="Filter by topic">${avail.map((t) =>
-        `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}
-        ${TOPICS.filter((t) => OUT_TOPICS.has(t.id)).map((t) => `<span class="chip chip-out" id="xt-${t.id}" title="${OUT_OF_SCOPE_LABEL}">${esc(t.name)} · ${OUT_OF_SCOPE_LABEL.toLowerCase()}</span>`).join('')}
-        ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
+        `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}        ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
         <input type="search" id="exam-search" class="pick-search" placeholder="Search by name, exam, or question number" value="${esc(ui.examQuery)}" aria-label="Search questions" autocomplete="off">
         <div class="pick-cols">
           <div class="pick-list" id="pick-list" role="group" aria-label="Questions">${pickListHTML()}</div>
