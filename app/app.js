@@ -797,13 +797,7 @@
     ui.annMode = ui.annMode === mode ? 'none' : mode;
     const art = article();
     if (art) art.dataset.mode = ui.annMode;
-    syncNoteMode();
     updateToolbar();
-  }
-  // With the note tool on, the note layer takes clicks so a note can be placed anywhere. Notes have their own tools.
-  function syncNoteMode() {
-    const layer = document.getElementById('note-layer');
-    if (layer) layer.classList.toggle('placing', ui.annMode === 'note');
   }
   function updateToolbar() {
     const bar = document.getElementById('annot-bar');
@@ -811,7 +805,7 @@
     const h = hist(leftPid);
     bar.querySelectorAll('[data-ann]').forEach((b) => {
       const k = b.dataset.ann;
-      if (['hl', 'pen', 'eraser', 'note'].includes(k)) b.setAttribute('aria-pressed', String(ui.annMode === k));
+      if (['hl', 'pen', 'eraser'].includes(k)) b.setAttribute('aria-pressed', String(ui.annMode === k));
       if (k === 'undo') b.disabled = !h.undo.length;
       if (k === 'redo') b.disabled = !h.redo.length;
       if (k === 'clear') b.disabled = !anns(leftPid).length;
@@ -823,7 +817,6 @@
         hl: 'Select text or code to highlight it.',
         pen: 'Draw with the mouse or trackpad. Scrolling still works.',
         eraser: 'Click or drag over a mark to erase it.',
-        note: 'Click where the sticky note should go.',
       }[ui.annMode];
     }
   }
@@ -1138,7 +1131,6 @@
     const mins = minMap();
     layer.innerHTML = order.map((a, i) => (mins[a.id] ? '' : noteHTML(a, i + 1))).join('');
     if (dockEl()) dockEl().innerHTML = dockButtons();
-    syncNoteMode();
     layoutNotes();
   }
   // The text again, behind the (transparent) text box, with the highlighted ranges marked. A trailing zero-width
@@ -1330,12 +1322,20 @@
     el.dataset.tool = noteTool[id];
     el.querySelectorAll('.snote-tools [aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.nt === noteTool[id])));
   }
-  function createNote(x, y) {
+  // The note button makes a note right away, in the middle of the work area (both panes). If another note already
+  // starts there, the new one steps down and to the right so it doesn't hide it.
+  function createNote() {
     const layer = noteLayer();
-    const px = Math.max(0, Math.min(x, layer.clientWidth - NOTE_NEW.w));
-    const py = Math.max(0, Math.min(y, layer.clientHeight - NOTE_NEW.h));
+    if (!layer || !leftPid) return;
+    flushNoteEdit();
+    let px = Math.round((layer.clientWidth - NOTE_NEW.w) / 2);
+    let py = Math.round((layer.clientHeight - NOTE_NEW.h) / 2);
+    const taken = () => [...layer.querySelectorAll('.snote')].some((n) => Math.abs(n.offsetLeft - px) < 12 && Math.abs(n.offsetTop - py) < 12);
+    for (let i = 0; i < 12 && taken(); i++) { px += 28; py += 28; }
+    px = Math.max(0, Math.min(px, layer.clientWidth - NOTE_NEW.w));
+    py = Math.max(0, Math.min(py, layer.clientHeight - NOTE_NEW.h));
     const a = Object.assign({ id: newId(), kind: 'note' }, anchorAt(px, py), NOTE_NEW, { t: Date.now(), items: [] });
-    setAnnMode('none');
+    if (['pen', 'eraser'].includes(ui.annMode)) setAnnMode('none'); // type in the new note, not draw on the page
     commit(leftPid, [{ op: 'add', ann: a }]);
     startText(a.id, [0, GRIP]);
     announce('Note added. Type, or use its toolbar to highlight, draw or add a tree.');
@@ -1699,13 +1699,6 @@
       }
     });
   }
-  // With the note tool on, the layer takes the click (on either pane) and a note appears there.
-  function onLayerDown(e) {
-    if (ui.annMode !== 'note' || e.button !== 0 || e.target !== noteLayer()) return;
-    e.preventDefault();
-    const L = noteLayer().getBoundingClientRect();
-    createNote(e.clientX - L.left, e.clientY - L.top);
-  }
   // The layer and both panes belong to the practice screen and outlive a question, so they are wired once each.
   let dockWired = false;
   function wireNotes() {
@@ -1715,7 +1708,6 @@
     layer.dataset.wired = '1';
     ['pane-left', 'pane-right'].forEach((id) => document.getElementById(id).addEventListener('scroll', layoutNotes, { passive: true }));
     layer.addEventListener('mousedown', (e) => { if (e.target.closest('.snote-tools button, .snote-hbtn')) e.preventDefault(); }); // keep typing focus
-    layer.addEventListener('pointerdown', onLayerDown);
     layer.addEventListener('click', onNoteClick);
     layer.addEventListener('input', onNoteInput);
     layer.addEventListener('focusout', (e) => { if (e.target.matches('.snote-text, .tnode-input')) flushNoteEdit(); });
@@ -2823,7 +2815,7 @@
         ${tool('hl', 'Highlighter (select text)', 'aria-pressed="false"')}
         ${tool('pen', 'Red pen', 'aria-pressed="false"')}
         ${tool('eraser', 'Eraser', 'aria-pressed="false"')}
-        ${tool('note', 'Sticky note', 'aria-pressed="false"')}
+        ${tool('note', 'New sticky note')}
         <span class="ann-sep" aria-hidden="true"></span>
         ${tool('undo', 'Undo')}${tool('redo', 'Redo')}
         ${tool('clear', 'Clear all annotations')}
@@ -3287,7 +3279,7 @@
     ['hl', 'Highlighter', 'Select text or code to highlight what matters.'],
     ['pen', 'Red pen', 'Draw or write on the problem.'],
     ['eraser', 'Eraser', 'Click or drag over a mark to remove it.'],
-    ['note', 'Sticky note', 'Click where it should go, then pick a blank note or a tree note. Drag its top bar to move it and its corner to resize it.'],
+    ['note', 'Sticky note', 'A note appears in the middle of the page, ready to type; its own toolbar can highlight, draw and add a tree. Drag its top bar to move it, its corner to resize it, and – to tuck it into the bottom bar.'],
     ['undo', 'Undo', 'Take back your last change.'],
     ['redo', 'Redo', 'Bring back what you undid.'],
     ['clear', 'Clear', 'Remove every mark on this question.'],
@@ -3906,7 +3898,8 @@
     const k = b.dataset.ann;
     if (k === 'hl') {
       if (highlightSelection()) { if (ui.annMode !== 'hl') setAnnMode('hl'); } else setAnnMode('hl');
-    } else if (k === 'pen' || k === 'eraser' || k === 'note') setAnnMode(k);
+    } else if (k === 'pen' || k === 'eraser') setAnnMode(k);
+    else if (k === 'note') createNote();
     else if (k === 'settings') setSettingsOpen(document.getElementById('exam-settings').hidden);
     else if (k === 'autofill') toggleAutoFill();
     else if (k === 'undo') { flushNoteEdit(); undo(leftPid); }

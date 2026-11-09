@@ -55,7 +55,7 @@ window.CS61A_TOUR = (function () {
     { id: 'annotate', find: one('#annot-bar'), title: 'Mark up the problem',
       html: () => `<p>Use these tools on the problem. Your marks are saved with this question.</p>${hooks.annTools()}` },
     { id: 'notes', find: one('#annot-bar [data-ann="note"]'), title: 'Sticky notes', demo: 'note',
-      html: '<p>Click the note tool, then anywhere on the page: a note appears, ready to type. Its own toolbar can highlight, draw, erase and add a <b>tree</b> (<b>+</b> adds a branch, <b>×</b> removes one).</p><p>Drag the top bar to move a note (even to the right side), the corner to resize it, and <b>–</b> to tuck it into the bar at the bottom. Click its numbered icon there to bring it back.</p>' },
+      html: '<p>Click the note tool and a note appears in the middle of the page, ready to type. Its own toolbar can highlight, draw, erase and add a <b>tree</b> (<b>+</b> adds a branch, <b>×</b> removes one).</p><p>Drag the top bar to move a note (even to the right side), the corner to resize it, and <b>–</b> to tuck it into the bar at the bottom. Click its numbered icon there to bring it back.</p>' },
     { id: 'blanks', find: blankPair, title: 'Your answers fill the code',
       html: '<p>What you choose or type for a part on the right appears in its blank in the code on the left, so you can read your whole solution in place.</p><p>Click a blank in the code to jump to its part.</p>' },
     { id: 'run', find: one('#run-btn'), title: 'Run Code',
@@ -223,23 +223,22 @@ window.CS61A_TOUR = (function () {
         await move([target[0] + 10, target[1]], 700, follow); await click();
         follow(target); line.classList.add('done'); // snapped onto the list
       } else if (kind === 'note') {
-        // Click to make a note and type in it, add a tree with the note's own tree tool (6 → 4, 2), then minimize the
-        // note into its numbered icon in the bottom bar and click the icon to bring it back.
+        // One click on the note button makes a note in the middle; type in it, add a tree with the note's own tree tool
+        // (6 → 4, 2), then minimize the note into its numbered icon in the bottom bar and click the icon to bring it back.
         const W = stage.clientWidth;
         const H = stage.clientHeight;
         const t = tools(['hl', 'pen', 'eraser', 'note']);
         el(stage, 'td-foot', 0, H - 28, '<span class="td-exit">← Exit</span><span class="td-qbtn">Question 1 ▴</span>');
         const center = (node) => { const r = node.getBoundingClientRect(), b = stage.getBoundingClientRect(); return [r.left - b.left + r.width / 2, r.top - b.top + r.height / 2]; };
         await sleep(400);
-        await move(center(t.note)); await click(); t.note.classList.add('on');
-        await move([36, 58]); await click();
-        t.note.classList.remove('on');
+        await move(center(t.note)); await click();
         const nx = 16;
         const ny = 46;
         const nw = W - 32;
         const nh = H - ny - 38;
         const note = el(stage, 'td-note', nx, ny, `<div class="td-note-bar">Note 1</div><span class="td-nmin">–</span><div class="td-ntools">${['select', 'hl', 'pen', 'eraser', 'tree'].map((k) => `<span data-k="${k}">${hooks.icon(k)}</span>`).join('')}</div><span class="td-ntext"></span><svg class="td-note-ink"><defs><marker id="td-head-n" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z"/></marker></defs><g></g></svg><div class="td-grip"></div>`);
         Object.assign(note.style, { width: `${nw}px`, height: `${nh}px` });
+        if (note.animate) note.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 220, easing: 'ease-out' }); // it pops up in the middle
         const ntool = (k) => note.querySelector(`.td-ntools [data-k="${k}"]`);
         ntool('select').classList.add('on');
         const nodes = [];

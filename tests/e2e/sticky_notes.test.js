@@ -1,4 +1,4 @@
-// Sticky notes in the annotation toolbar: a click places a note ready to type; each note has its own toolbar (type
+// Sticky notes in the annotation toolbar: one click on the note button makes a note in the middle of the page, ready to type; each note has its own toolbar (type
 // and move, highlighter, red pen, eraser, tree, undo / redo, delete selected, clear). Text boxes and trees can be
 // dragged inside a note but never overlap (a drop slides to the nearest free spot, growth pushes things down);
 // drawings move with the text box or tree they are drawn on; resizing only adds space; notes can sit on either side
@@ -28,7 +28,7 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
   const noteOf = async (id) => (await notes()).find((n) => n.id === id);
   const click = async (sel) => { await page.waitForSelector(sel, { visible: true, timeout: 8000 }); await page.click(sel); await wait(80); };
   const art = () => page.$eval('#problem-article', (a) => { const r = a.getBoundingClientRect(); return { x: r.left, y: r.top }; });
-  const place = async (dx, dy) => { await click('[data-ann="note"]'); const a = await art(); await page.mouse.click(a.x + dx, a.y + dy); await wait(150); };
+  const place = async () => { await click('[data-ann="note"]'); await wait(150); }; // one click: the note appears in the middle
   const away = async () => { await page.mouse.click(8, 890); await wait(120); }; // somewhere neutral, so the field loses focus
   const addKid = async (n, path) => { await page.hover(`${n} .tnode[data-path="${path}"]`); await page.click(`${n} .tnode[data-path="${path}"] .tnode-add`); await wait(80); };
   const box = (sel) => page.$eval(sel, (e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; });
@@ -63,11 +63,7 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
   // ── Toolbar ──
   const order = await page.$$eval('#annot-bar [data-ann]', (bs) => bs.map((b) => b.dataset.ann));
   ok(order.slice(0, 4).join() === 'hl,pen,eraser,note', `sticky note tool sits after the eraser (${order.join(', ')})`);
-  await click('[data-ann="note"]');
-  ok(await page.$eval('[data-ann="note"]', (b) => b.getAttribute('aria-pressed')) === 'true' && /sticky note should go/.test(await page.$eval('#annot-hint', (h) => h.textContent)),
-    'the tool is pressed and the hint says to click where the note goes');
-  await click('[data-ann="note"]');
-  ok(await page.$eval('[data-ann="note"]', (b) => b.getAttribute('aria-pressed')) === 'false', 'clicking it again turns it off');
+  ok(await page.$eval('[data-ann="note"]', (b) => !b.hasAttribute('aria-pressed') && b.title === 'New sticky note'), 'the note button is a plain button (“New sticky note”), not a tool that stays on');
 
   // ── Pen stroke first, to check notes don't move saved strokes ──
   await click('[data-ann="pen"]');
@@ -76,11 +72,12 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
   await click('[data-ann="pen"]');
   const strokeBefore = await page.$eval('.annot-layer path', (p) => p.getAttribute('d'));
 
-  // ── A click places a note, ready to type ──
-  await place(120, 160);
-  ok(!(await page.$('.note-pick')) && await page.$$eval('.snote', (l) => l.length) === 1, 'clicking the page places a note right away (no Blank / Tree chooser)');
+  // ── One click makes a note in the middle of the page, ready to type ──
+  await place();
+  ok(!(await page.$('.note-pick')) && await page.$$eval('.snote', (l) => l.length) === 1, 'one click on the note button makes a note (no second click on the page, no chooser)');
+  const mid0 = await page.evaluate(() => { const l = document.getElementById('note-layer').getBoundingClientRect(), n = document.querySelector('.snote').getBoundingClientRect(); return [n.left + n.width / 2 - (l.left + l.width / 2), n.top + n.height / 2 - (l.top + l.height / 2)]; });
+  ok(Math.abs(mid0[0]) < 3 && Math.abs(mid0[1]) < 3, `it appears in the middle of the page (${mid0.map(Math.round).join(', ')} px off center)`);
   ok(await page.evaluate(() => document.activeElement.classList.contains('snote-text')), 'the new note is ready to type');
-  ok(await page.$eval('[data-ann="note"]', (b) => b.getAttribute('aria-pressed')) === 'false', 'the main note tool turns off after placing one');
   ok(await page.$eval('.snote .snote-title', (t) => t.textContent) === 'Note 1', 'the note is numbered: Note 1');
   await page.keyboard.type('base case?');
   await page.keyboard.press('ArrowRight');
@@ -100,9 +97,9 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
 
   // ── Move and resize; resizing never moves what is inside ──
   const b0 = await box(n1);
-  await dragBy(`${n1} .snote-bar`, 90, 60);
+  await dragBy(`${n1} .snote-bar`, -300, -200);
   const b1 = await box(n1);
-  ok(b1.x - b0.x === 90 && b1.y - b0.y === 60, `dragging the top bar moves the note (${b1.x - b0.x}, ${b1.y - b0.y})`);
+  ok(b1.x - b0.x === -300 && b1.y - b0.y === -200, `dragging the top bar moves the note (${b1.x - b0.x}, ${b1.y - b0.y})`);
   const t0 = await box(`${n1} .nitem-text`);
   await dragBy(`${n1} .snote-size`, 70, 40);
   const b2 = await box(n1);
@@ -281,12 +278,13 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
 
   // ── Anywhere in the work area: the right pane, across the divider, scrolling with its own pane ──
   const panes = await page.$eval('#pane-right', (r) => { const b = r.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width }; });
-  await click('[data-ann="note"]');
-  await page.mouse.click(panes.x + 140, panes.y + 120); await wait(150);
+  await place();
   await page.keyboard.type('right side'); await away();
+  const nr = await box('.snote:last-of-type');
+  await dragBy('.snote:last-of-type .snote-bar', Math.round(panes.x + 140 - nr.x), 0);
   N = await notes();
   const right = N.find((n) => n.items.some((i) => i.text === 'right side'));
-  ok(right && right.pane === 'right', `a note can be placed on the right side (pane: ${right && right.pane})`);
+  ok(right && right.pane === 'right', `a note can be dragged onto the right side (pane: ${right && right.pane})`);
   ok(N.find((n) => n.id === id1).pane === 'left', 'the note placed on the problem belongs to the left side');
   const rsel = `.snote[data-aid="${right.id}"]`;
   ok(await page.$eval(`${rsel} .snote-title`, (t) => t.textContent) === 'Note 2', 'the second note is Note 2');
@@ -306,6 +304,13 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
   ok((await noteOf(right.id)).pane === 'right', 'Undo takes it back across');
   const barZ = await page.evaluate(() => { const b = document.querySelector('#annot-bar [data-ann="note"]').getBoundingClientRect(); return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2).closest('[data-ann]') !== null; });
   ok(barZ, 'notes never cover the annotation toolbar');
+  // two clicks: the second note steps down and right instead of hiding the first
+  await place(); await place();
+  const pair = await page.$$eval('.snote', (l) => l.slice(-2).map((n) => [n.offsetLeft, n.offsetTop]));
+  ok(pair.length === 2 && pair[1][0] - pair[0][0] === 28 && pair[1][1] - pair[0][1] === 28, `a second new note is offset so it doesn't cover the first (${JSON.stringify(pair)})`);
+  await away();
+  await click('[data-ann="undo"]'); await click('[data-ann="undo"]');
+  ok((await notes()).length === 2, 'Undo twice removes the two new notes');
 
   // ── Minimize into a numbered icon, and back ──
   const where1 = await box(n1);
@@ -434,7 +439,7 @@ const PREFS = { mode: 'practice', exams: ALL, examsKnown: ALL, topics: [], diffi
   await page.goto(APP_URL); await wait(150);
   await click('[data-action="enter"]'); await click('[data-action="start-exam"]');
   await page.waitForSelector('#pane-right .part');
-  await place(200, 120);
+  await place();
   await page.keyboard.type('try p == len');
   await away();
   ok(((await st()).exam.annotations['fa25-3'] || []).some((n) => n.kind === 'note' && n.items.some((i) => i.text === 'try p == len')), 'notes work during an exam and are saved with it');
