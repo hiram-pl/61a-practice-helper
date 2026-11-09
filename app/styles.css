@@ -168,35 +168,61 @@ mark.hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0; }
 .problem[data-mode="pen"] .annot-layer { pointer-events: auto; cursor: crosshair; touch-action: none; }
 .problem[data-mode="eraser"] .annot-layer { pointer-events: auto; cursor: cell; touch-action: none; }
 
-/* Sticky notes: a layer over both panes. Only its notes and the chooser take clicks, except while placing a note. */
+/* Sticky notes: a layer over both panes. Only its notes and the dock take clicks, except while placing a note. */
 .note-layer { position: absolute; inset: 0; z-index: 15; overflow: hidden; pointer-events: none; font-family: var(--sans); }
 .note-layer.placing { pointer-events: auto; cursor: copy; touch-action: none; }
-.snote { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; background: #fff8b8; border: 1px solid #e0c54a; border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .16); pointer-events: auto; }
+.snote { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; background: #fffbd9; border: 1px solid #ebdf9f; border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .16); pointer-events: auto; }
 .snote.dragging { box-shadow: 0 12px 28px rgba(0, 0, 0, .24); }
-.snote-bar { flex: none; display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3px 0 9px; background: #f6e27a; border-bottom: 1px solid #e0c54a; border-radius: 5px 5px 0 0; cursor: grab; touch-action: none; user-select: none; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b5a00; }
+.snote-bar { flex: none; display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3px 0 9px; background: #f8efbd; border-bottom: 1px solid #ebdf9f; border-radius: 5px 5px 0 0; cursor: grab; touch-action: none; user-select: none; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #7a6a24; }
 .snote.dragging .snote-bar { cursor: grabbing; }
-.snote-x { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: #6b5a00; font-size: 16px; line-height: 1; cursor: pointer; }
-.snote-x:hover { background: rgba(0, 0, 0, .08); }
-.snote-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
-/* A blank note: the text box is transparent over a mirror of its text that draws the highlights. Same font and padding. */
-.snote-textwrap { position: relative; min-height: 100%; }
-.snote-mirror, .snote-text { box-sizing: border-box; padding: 8px 10px; font: 14px/1.45 var(--sans); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
-.snote-mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; }
+.snote-btns { display: flex; gap: 1px; }
+.snote-hbtn { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: #7a6a24; font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer; }
+.snote-hbtn:hover { background: rgba(0, 0, 0, .08); }
+/* Each note has its own toolbar */
+.snote-tools { flex: none; display: flex; align-items: center; gap: 1px; padding: 2px 4px; background: #fffde8; border-bottom: 1px solid #f1e8bd; }
+.snote-tools .ann-btn { width: 22px; height: 22px; border-radius: 4px; }
+.snote-tools .ann-btn svg { width: 15px; height: 15px; }
+.snote-tools .ann-btn:hover:not(:disabled) { background: rgba(0, 0, 0, .06); }
+.snote-tools .ann-btn[aria-pressed="true"] { background: var(--accent-soft); }
+.snote-tools [data-nt="pen"] { color: #c62828; }
+.snote-tools .ann-sep { height: 14px; margin: 0 3px; }
+/* The body: items are placed from the top-left corner of .snote-canvas, so resizing only adds or removes space */
+.snote-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.snote-canvas { position: absolute; left: 8px; top: 8px; }
+.snote-empty { position: absolute; left: 10px; right: 10px; top: 10px; margin: 0; font-size: 13px; color: #9a8b4a; pointer-events: none; }
+.nitem { position: absolute; box-sizing: border-box; padding-top: 12px; border-radius: 4px; }
+.nitem-grip { position: absolute; left: 0; top: 1px; width: 28px; height: 9px; border-radius: 3px; cursor: grab; touch-action: none; opacity: 0; transition: opacity .1s;
+  background: radial-gradient(circle, #c2b26a 1.1px, transparent 1.5px) 1px 0 / 5px 4.5px; }
+.nitem:hover .nitem-grip, .nitem.sel .nitem-grip, .nitem:focus-within .nitem-grip { opacity: 1; }
+.nitem.sel { outline: 1px dashed #d4c47a; outline-offset: 2px; }
+.nitem.dragging { opacity: .9; }
+.nitem.dragging .nitem-grip { cursor: grabbing; }
+.nitem.clash { outline: 2px solid #d62828; }
+.snote[data-tool="select"] .tree-canvas { cursor: grab; }
+.snote[data-tool="select"] .tnode { cursor: auto; }
+/* A text box is as wide as its text (up to the max-width set by fitTexts, then it wraps): the mirror of the text sets
+   the size and draws the highlights; the transparent text box sits exactly on top of it. Same font and padding. */
+.nitem-text { width: max-content; min-width: 60px; }
+.snote-textwrap { position: relative; }
+.snote-mirror, .snote-text { box-sizing: border-box; padding: 2px 4px; font: 14px/1.45 var(--sans); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.snote-mirror { position: relative; padding-right: 8px; color: transparent; pointer-events: none; }
 .snote-mirror mark { background: #a6dcff; color: transparent; border-radius: 2px; }
-.snote-text { position: relative; display: block; width: 100%; min-height: 100%; overflow: hidden; resize: none; border: 0; outline: none; background: transparent; color: var(--ink); }
-.snote-ink { position: absolute; left: 0; top: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.snote-text { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; overflow: hidden; resize: none; border: 0; border-radius: 3px; outline: none; background: transparent; color: var(--ink); }
+.snote-text:focus { box-shadow: inset 0 0 0 1px #e3d58f; }
+.snote-ink { position: absolute; left: 0; top: 0; z-index: 2; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .snote-ink path { fill: none; stroke: #d62828; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
-/* Pen / eraser on: a note is drawn on, not typed in or moved. Highlighter on: blue selection, nodes are clicked. */
-.note-layer.inking .snote { cursor: crosshair; touch-action: none; }
-.note-layer.erasing .snote { cursor: cell; }
-.note-layer.inking .snote * { pointer-events: none; }
-.note-layer.highlighting .snote-text::selection { background: #a6dcff; }
-.note-layer.highlighting .tnode-input { cursor: pointer; }
-.note-layer.erasing .snote-mirror mark, .note-layer.erasing .tnode-input.hl { outline: 1px dashed #b3261e; }
+/* Tools: pen and eraser draw on the note, the tree tool places a tree, the highlighter selects in blue */
+.snote[data-tool="select"] .snote-body { cursor: text; }
+.snote[data-tool="pen"] .snote-body, .snote[data-tool="eraser"] .snote-body { cursor: crosshair; touch-action: none; }
+.snote[data-tool="eraser"] .snote-body { cursor: cell; }
+.snote[data-tool="pen"] .snote-body *, .snote[data-tool="eraser"] .snote-body * { pointer-events: none; }
+.snote[data-tool="tree"] .snote-body { cursor: copy; }
+.snote[data-tool="hl"] .snote-text::selection { background: #a6dcff; }
+.snote[data-tool="hl"] .tnode-input { cursor: pointer; }
+.snote[data-tool="eraser"] .snote-mirror mark, .snote[data-tool="eraser"] .tnode-input.hl { outline: 1px dashed #b3261e; }
 .snote-size { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; border-radius: 0 0 5px 0;
-  background: linear-gradient(135deg, transparent 52%, #c9ad2c 52%, #c9ad2c 60%, transparent 60%, transparent 72%, #c9ad2c 72%, #c9ad2c 80%, transparent 80%); }
-.tree-hint { margin: 6px 10px 0; font-size: 12px; line-height: 1.4; color: #6b5a00; }
-.tree-canvas { position: relative; margin: 0 auto; }
+  background: linear-gradient(135deg, transparent 52%, #d4c47a 52%, #d4c47a 60%, transparent 60%, transparent 72%, #d4c47a 72%, #d4c47a 80%, transparent 80%); }
+.tree-canvas { position: relative; }
 .tree-edges { position: absolute; left: 0; top: 0; overflow: visible; }
 .tree-edges line { stroke: #333; stroke-width: 1.4; }
 .tree-edges marker path { fill: #333; }
@@ -209,8 +235,17 @@ mark.hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0; }
 .tnode-del { top: -5px; color: #b3261e; }
 .tnode:hover .tnode-btn, .tnode:focus-within .tnode-btn, .tnode-btn:focus { opacity: 1; }
 .tnode-btn:hover { background: var(--accent-soft); }
-.note-pick { position: absolute; z-index: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap; pointer-events: auto; padding: 8px 10px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 8px 22px rgba(0, 0, 0, .16); font-size: 13px; }
-.note-pick-title { font-weight: 700; color: var(--muted); }
+/* Minimized notes: numbered icons in the bottom-left corner. The ghost is the note being pulled into its icon. */
+.snote-ghost { pointer-events: none; z-index: 60; font-family: var(--sans); }
+.p-footer .left { display: flex; align-items: center; min-width: 0; }
+.note-dock { display: flex; gap: 8px; margin: 0 auto; padding: 0 12px; overflow-x: auto; }
+.note-dock:empty { display: none; }
+.dock-note { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; flex: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .2)); }
+.dock-note svg { position: absolute; inset: 0; width: 36px; height: 36px; fill: #fffbd9; stroke: #d4c47a; stroke-width: 1.4; stroke-linejoin: round; }
+.dock-note svg path + path { fill: #f8efbd; }
+.dock-num { position: relative; margin: -4px 3px 0 0; font: 700 13px/1 var(--sans); color: #7a6a24; }
+.dock-note:hover svg { fill: #fff6c4; stroke: #b8a65a; }
+.dock-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .problem[data-mode="eraser"] mark.hl, .problem[data-mode="eraser"] .cm-hl { outline: 1px dashed #b3261e; }
 .problem[data-mode="hl"] .annot-text, .problem[data-mode="hl"] .CodeMirror-lines { cursor: text; }
 .problem[data-mode="hl"] ::selection { background: #fff59d; }
@@ -545,18 +580,28 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
 .td-slot.typing::after, .td-box.typing::after, .td-cell.typing::after, .td-lbl.typing::after { content: ''; display: inline-block; width: 1px; height: 13px; margin-left: 1px; vertical-align: -2px; background: var(--ink); animation: td-caret 1s steps(1) infinite; }
 .td-cell.active { outline: 2px solid var(--accent-2); }
 /* Sticky note demo: two halves (problem | answers), the chooser, a tree note that is dragged across and resized. */
-.tour-demo[data-demo="note"] { height: 200px; }
+.tour-demo[data-demo="note"] { height: 214px; }
+.td-foot { left: 0; right: 0; height: 28px; border-top: 2px solid var(--line); background: var(--paper); font-family: var(--sans); font-size: 10px; }
+.td-exit { position: absolute; left: 8px; top: 7px; }
+.td-qbtn { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); padding: 2px 7px; border-radius: 4px; background: var(--ink); color: #fff; font-weight: 700; }
 .td-divider { width: 0; height: 160px; border-left: 3px solid var(--line); }
 .td-pane-label { font-family: var(--sans); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.td-pick { z-index: 1; display: flex; gap: 4px; padding: 4px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .14); font-family: var(--sans); font-size: 10.5px; white-space: nowrap; }
-.td-pick span { padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: 999px; background: #fff; }
-.td-note { z-index: 1; box-sizing: border-box; background: #fff8b8; border: 1px solid #e0c54a; border-radius: 5px; box-shadow: 0 4px 12px rgba(0, 0, 0, .14); }
+.td-nmin { right: 5px; top: 0; font-family: var(--sans); font-size: 11px; font-weight: 700; line-height: 15px; color: #6b5a00; }
+.td-ntools { left: 0; right: 0; top: 15px; height: 17px; display: flex; gap: 2px; padding-left: 3px; background: #fffde8; border-bottom: 1px solid #f1e8bd; }
+.td-ntools span { display: inline-flex; width: 14px; height: 14px; margin-top: 1px; border: 1px solid transparent; border-radius: 2px; }
+.td-ntools span.on { background: var(--accent-soft); border-color: var(--accent); }
+.td-ntools svg { width: 12px; height: 12px; margin: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.td-ntext { left: 9px; top: 40px; font-family: var(--sans); font-size: 12px; white-space: nowrap; }
+.td-ntext.typing::after { content: ''; display: inline-block; width: 1px; height: 11px; margin-left: 1px; vertical-align: -2px; background: var(--ink); animation: td-caret 1s steps(1) infinite; }
+.td-dock { z-index: 2; width: 22px; height: 22px; box-sizing: border-box; border: 1px solid #d4c47a; border-radius: 3px 3px 8px 3px; background: #fffbd9; box-shadow: 0 2px 5px rgba(0, 0, 0, .2); font-family: var(--sans); font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; color: #6b5a00; opacity: 0; transform: scale(.6); transition: opacity .15s, transform .2s; }
+.td-dock.show { opacity: 1; transform: none; }
+.td-note { z-index: 1; box-sizing: border-box; background: #fffbd9; border: 1px solid #ebdf9f; border-radius: 5px; box-shadow: 0 4px 12px rgba(0, 0, 0, .14); }
 .td-note > * { position: absolute; }
-.td-note-bar { left: 0; right: 0; top: 0; height: 15px; padding-left: 6px; background: #f6e27a; border-bottom: 1px solid #e0c54a; border-radius: 4px 4px 0 0; font-family: var(--sans); font-size: 8.5px; font-weight: 700; line-height: 15px; letter-spacing: .05em; text-transform: uppercase; color: #6b5a00; }
+.td-note-bar { left: 0; right: 0; top: 0; height: 15px; padding-left: 6px; background: #f8efbd; border-bottom: 1px solid #ebdf9f; border-radius: 4px 4px 0 0; font-family: var(--sans); font-size: 8.5px; font-weight: 700; line-height: 15px; letter-spacing: .05em; text-transform: uppercase; color: #6b5a00; }
 .td-note-ink { left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
 .td-note-ink line { stroke: #333; stroke-width: 1.2; marker-end: url(#td-head-n); }
 .td-note-ink marker path { fill: #333; }
-.td-node { width: 20px; height: 20px; box-sizing: border-box; border: 1.3px solid #333; border-radius: 50%; background: #fff; text-align: center; line-height: 18px; font-size: 11px; }
+.td-node { width: 22px; height: 22px; box-sizing: border-box; border: 1.3px solid #333; border-radius: 50%; background: #fff; text-align: center; line-height: 20px; font-size: 12px; }
 .td-plus { position: absolute; right: -11px; bottom: -4px; width: 11px; height: 11px; border: 1px solid var(--line-strong); border-radius: 50%; background: #fff; color: var(--accent); font-family: var(--sans); font-size: 9px; font-weight: 700; line-height: 9px; text-align: center; opacity: 0; transition: opacity .15s; }
 .td-node.show .td-plus { opacity: 1; }
 .td-grip { right: 0; bottom: 0; width: 10px; height: 10px; border-radius: 0 0 4px 0; background: linear-gradient(135deg, transparent 50%, #c9ad2c 50%, #c9ad2c 62%, transparent 62%, transparent 76%, #c9ad2c 76%, #c9ad2c 88%, transparent 88%); }
@@ -720,9 +765,12 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
   .pane { overflow: visible; padding: 18px 16px 24px; }
   .pane-left { border-right: 0; border-bottom: 3px solid var(--line); }
   .p-footer { position: sticky; bottom: 0; background: var(--paper); grid-template-columns: auto 1fr; padding: 10px 16px; }
-  .p-footer .left { display: none; }
+  /* Practice hides Exit on a phone, so the minimized-note icons float just above the bar instead */
+  .p-footer:not(.exam) .left { position: absolute; left: 12px; bottom: calc(100% + 8px); }
+  .p-footer:not(.exam) .left > :not(.note-dock) { display: none; }
+  .note-dock { padding: 0 8px; }
   .p-footer.exam { display: flex; flex-wrap: wrap; justify-content: space-between; row-gap: 8px; }
-  .p-footer.exam .left { display: block; }
+  .p-footer.exam .left { display: flex; }
   .p-footer.exam .navigator { bottom: 116px; max-height: calc(100vh - 190px); }
   .mode-switch, .kind-row, .pick-cols, .score-card { grid-template-columns: minmax(0, 1fr); }
   .review-banner { padding: 8px 16px; }

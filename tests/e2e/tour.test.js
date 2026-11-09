@@ -106,15 +106,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(await step(page) === 'annotate', 'Next again: on to the annotation tip');
   await click(page, '[data-tour="next"]');
   ok(await step(page) === 'notes', 'after the annotation tip: the sticky notes tip');
-  ok(await page.$eval('.tour-card', (c) => /tree note/.test(c.textContent) && /right side/.test(c.textContent)), 'it explains blank and tree notes, moving (even to the right side) and resizing');
+  ok(await page.$eval('.tour-card', (c) => /ready to type/.test(c.textContent) && /tree/.test(c.textContent) && /right side/.test(c.textContent) && /numbered icon/.test(c.textContent)),
+    'it explains typing, the tree tool, moving (even to the right side), resizing and minimizing');
   await page.waitForSelector('.tour-demo[data-demo="note"] .td-note', { timeout: 8000 }).catch(() => {});
-  ok(await page.$('.tour-demo[data-demo="note"] .td-note'), 'its animation places a tree note');
+  ok(await page.$('.tour-demo[data-demo="note"] .td-note'), 'its animation places a note');
   const labels = () => [...document.querySelectorAll('.tour-demo[data-demo="note"] .td-lbl')].map((n) => n.textContent).join();
   await page.waitForFunction((f) => new Function(`return (${f})()`)() === '6,4,2', { timeout: 8000 }, labels.toString()).catch(() => {});
   ok(await page.evaluate((f) => new Function(`return (${f})()`)(), labels.toString()) === '6,4,2' && await page.$$eval('.tour-demo[data-demo="note"] .td-note-ink line', (l) => l.length) === 2,
     'the animation builds 6 → 4, 2 with arrows');
-  await page.waitForFunction(() => { const d = document.querySelector('.tour-demo[data-demo="note"]'), n = d && d.querySelector('.td-note'); return n && n.offsetLeft > d.clientWidth / 2; }, { timeout: 8000 }).catch(() => {});
-  ok(await page.$eval('.tour-demo[data-demo="note"]', (d) => { const n = d.querySelector('.td-note'); return !!n && n.offsetLeft > d.clientWidth / 2; }).catch(() => false), 'then drags the note across to the answers side');
+  await page.waitForSelector('.tour-demo[data-demo="note"] .td-dock.show', { timeout: 8000 }).catch(() => {});
+  ok(await page.$eval('.tour-demo[data-demo="note"]', (d) => { const k = d.querySelector('.td-dock.show'), n = d.querySelector('.td-note'); return !!k && k.textContent === '1' && n.style.visibility === 'hidden'; }).catch(() => false),
+    'then minimizes it into a numbered icon');
+  await page.waitForSelector('.tour-demo[data-demo="note"] .td-note[data-reopened]', { timeout: 8000 }).catch(() => {});
+  ok(await page.$eval('.tour-demo[data-demo="note"]', (d) => { const n = d.querySelector('.td-note'); return n.style.visibility !== 'hidden' && !d.querySelector('.td-dock.show') && !d.querySelector('.td-divider'); }).catch(() => false),
+    'and clicks the icon to bring it back (one page, no left / right halves)');
   const first = ['directions-exam', 'annotate', ...await drain(page)];
   ok(first[1] === 'annotate' && first[2] === 'notes' && first.includes('mark') && !first.includes('run') && !first.includes('modes'),
     `exam tips: annotation, mark for review, no Run Code (${first.join(', ')})`);
