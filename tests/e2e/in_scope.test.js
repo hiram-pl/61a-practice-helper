@@ -1,5 +1,5 @@
 // This semester's scope (app/data/in_scope.js): out-of-scope parts never appear in Practice or Exam mode, the
-// out-of-scope topic says so, exam totals count only what is shown, scope notes appear next to their question, and
+// out-of-scope topic is not listed, exam totals count only what is shown, scope notes appear next to their question, and
 // saved data that mentions hidden parts (old attempts, old filters, old picks) still loads.
 const puppeteer = require('puppeteer-core');
 const path = require('path');
@@ -48,8 +48,8 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
   await seed({ prefs });
   await click('[data-action="enter"]');
   await click('[data-action="menu"][data-id="topics"]');
-  const eff = await page.$eval('input[name="topics"][value="efficiency"]', (i) => ({ disabled: i.disabled, row: i.closest('label').textContent.replace(/\s+/g, ' ').trim() }));
-  ok(eff.disabled && /Not in scope for this semester/.test(eff.row), `Topics: Efficiency is disabled and says “${eff.row}”`);
+  const topicRows = await page.$$eval('input[name="topics"]', (l) => l.map((i) => i.value));
+  ok(!topicRows.includes('efficiency') && topicRows.includes('trees') && !/scope/i.test(await text('.dd-panel')), `Topics menu: Efficiency is not listed (${topicRows.length} topics shown)`);
   await click('[data-action="menu"][data-id="topics"]');
   await click('[data-action="start"]'); await page.waitForSelector('#pane-right .part');
   let S = await st();
@@ -85,8 +85,8 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
   await click('[data-action="enter"]');
   S = await st();
   ok(JSON.stringify(S.examPrefs.picked) === '["fa25-3","fa23-3"]', `a saved pick of an out-of-scope question is dropped (${JSON.stringify(S.examPrefs.picked)})`);
-  const chip = await text('#xt-efficiency');
-  ok(await page.$eval('#xt-efficiency', (e) => e.tagName) === 'SPAN' && /not in scope for this semester/.test(chip), `exam topic filter: Efficiency shown as “${chip}”, not clickable`);
+  const chips = await page.$$eval('.chips [id^="xt-"]', (l) => l.map((c) => c.id));
+  ok(chips.length > 0 && !chips.includes('xt-efficiency'), `exam topic filter: Efficiency is not listed (${chips.length} topic chips)`);
   const listed = await page.$$eval('#pick-list [data-pick]', (l) => l.map((i) => i.dataset.pick));
   ok(!listed.some((pid) => ['sp23-2a', 'sp23-2b', 'fa22-4b', 'sp23-3a-iii'].includes(pid)) && listed.includes('sp24-1'), `picker lists ${listed.length} questions, none wholly out of scope`);
   await click('[data-action="start-exam"]'); await page.waitForSelector('#pane-right .part');

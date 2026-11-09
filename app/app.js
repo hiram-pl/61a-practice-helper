@@ -541,6 +541,7 @@
   //   { id, kind: 'hl',   where: 'intro' | 'outro', start, end }    text-offset highlight in the prose
   //   { id, kind: 'code', from: {line, ch}, to: {line, ch} }         highlight inside the code editor
   //   { id, kind: 'pen',  block, pts: [[x, y], …] }                  freehand stroke, relative to a block
+  //   { id, kind: 'note', pane, x, y, w, h, t, items, ink? }          sticky note (see Sticky notes below)
   // Pen strokes are anchored to the block (paragraph, editor, …) they start on, so they move with it
   // when the layout changes. Undo/redo history is kept in memory per problem as lists of add/remove ops.
   const history = {}; // pid -> { undo: [ops], redo: [ops] }
@@ -637,15 +638,17 @@
       .map((a) => `<path d="${strokePath(absPoints(art, a))}" data-aid="${a.id}"/>`).join('');
     const livePath = drawing && drawing.kind === 'pen' ? `<path class="live" d="${strokePath(drawing.pts)}"/>` : '';
     svg.innerHTML = paths + livePath;
+    layoutNotes();
   }
 
   // Apply one annotation change to state and to whatever is on screen.
   function addAnn(pid, a) {
-    anns(pid).push(a);
+    anns(pid).push(a.kind === 'note' ? normNote(cloneAnn(a)) : a); // notes are edited in place, so the list keeps its own copy
     if (a.kind === 'code') markCode(editors[pid], a);
     if (pid !== leftPid) return;
     if (a.kind === 'hl') renderProse(pid, a.where);
     if (a.kind === 'pen') layoutStrokes();
+    if (a.kind === 'note') renderNotes();
   }
   function removeAnn(pid, id) {
     const list = anns(pid);
@@ -657,6 +660,7 @@
     if (pid === leftPid) {
       if (a.kind === 'hl') renderProse(pid, a.where);
       if (a.kind === 'pen') layoutStrokes();
+      if (a.kind === 'note') renderNotes();
     }
     return a;
   }
@@ -865,6 +869,855 @@
     } else {
       record(leftPid, d.ops);
     }
+  }
+
+  // ── Sticky notes ──
+  // Stored with the other annotations as { id, kind: 'note', pane, x, y, w, h, t, items: [item, …], ink?: [stroke, …] }.
+  // Notes live in #note-layer, which covers both panes, so a note can sit anywhere and be dragged across the divider.
+  // Each note belongs to the pane its top-left corner is in ('left' or 'right'); x, y are in that pane's scrolling
+  // content, so the note scrolls with the problem or with the answers. `t` is when the note was made: notes are numbered
+  // 1, 2, … in that order. w, h is the size picked by resizing; a note is never drawn smaller than what is in it.
+  // Inside a note everything is placed from the top-left corner of its body, so resizing only adds or removes space:
+  //   { id, type: 'text', x, y, text, hls? }      a text box, as wide as its text; it wraps at the note's right edge or
+  //                                               at a tree beside it. hls are highlighted [start, end) ranges of its text
+  //   { id, type: 'tree', x, y, tree }            a tree { label, kids: [tree, …], hl? }; a node is addressed by its
+  //                                               path ('0' is the root, '0.1' its second branch)
+  //   ink: { id, pts, item? }                     a red-pen stroke; with `item`, pts are relative to that item and the
+  //                                               stroke moves with it, otherwise they are relative to the body
+  // Items never overlap: a dropped item slides to the nearest free spot, and an item that grows pushes the ones it
+  // reaches downward. Every change is one undo step that swaps the old note for the new one; the list keeps its own
+  // copy of each note (addAnn clones), so history entries never change afterwards. Typing edits the stored note directly
+  // and is recorded as one step when the field loses focus (or before undo, redo, clear and leaving the question).
+  // Each note also keeps its own undo history for its toolbar (noteHist). Whether a note is minimized is stored on the
+  // session (noteMin), not on the note, so undo never opens or closes one; minimized notes are numbered icons in the
+  // bottom bar, between Exit and the question navigator (#note-dock, part of footerHTML). Notes saved before items existed
+  // ({ type: 'text' | 'tree', text | tree }) are converted when shown (normNote). Note highlights are blue, so they
+  // show on yellow.
+  const NOTE_MIN = { w: 228, h: 110 };
+  const NOTE_NEW = { w: 260, h: 170 };
+  const NOTE_PAD = 8;  // space between the body's edge and what is in it
+  const NOTE_GAP = 8;  // the smallest space between two items
+  const GRIP = 12;     // the drag strip at the top of each item
+  const TEXT_MIN = 60; // a text box is as wide as its text, at least this, and wraps at the note's edge or a tree beside it
+  const TN = { d: 34, gapX: 20, gapY: 46, pad: 12 }; // node diameter, space between leaves and between levels, padding
+  const NOTE_TOOLS = [['select', 'Type and move'], ['hl', 'Highlighter'], ['pen', 'Red pen'], ['eraser', 'Eraser'], ['tree', 'New tree']];
+  const cloneAnn = (a) => JSON.parse(JSON.stringify(a));
+  let noteEdit = null;  // { pid, id, before } while text or a node label is being typed
+  let noteDrag = null;  // { id, kind: 'move' | 'size', el, start, orig, min, moved } while a note is dragged or resized
+  let itemDrag = null;  // { id, item, el, noteEl, start, orig, before, sizes, moved } while a text box or tree is dragged
+  let noteInk = null;   // { id, kind: 'pen' | 'eraser', el, pts | before, changed } while drawing or erasing on a note
+  let noteClickSkip = null; // a click that only ends typing or a selection in this note doesn't start a text box
+  const noteTool = {};  // note id -> the tool picked in its toolbar (default 'select')
+  const noteSel = {};   // note id -> the selected item
+  const noteHist = {};  // note id -> { undo: [{ before, after }], redo: [...] }, for the note's own undo / redo
+
+  const noteLayer = () => document.getElementById('note-layer');
+  const noteById = (id) => anns(leftPid).find((a) => a.kind === 'note' && a.id === id);
+  const noteEl = (id) => { const l = noteLayer(); return l ? l.querySelector(`.snote[data-aid="${id}"]`) : null; };
+  const paneEl = (side) => document.getElementById(side === 'right' ? 'pane-right' : 'pane-left');
+  const minMap = () => { const s = cur(); return s.noteMin || (s.noteMin = {}); };
+  const toolOf = (id) => noteTool[id] || 'select';
+  const nhist = (id) => noteHist[id] || (noteHist[id] = { undo: [], redo: [] });
+  const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+  const noteTime = (a) => a.t || parseInt(String(a.id).slice(1, 9), 36) || 0;
+  const r1 = (v) => Math.round(v * 10) / 10;
+
+  function normNote(a) {
+    if (a.items) return a;
+    const it = { id: `${a.id}-1`, x: 0, y: 0 };
+    a.items = [];
+    if (a.type === 'tree' && a.tree) a.items.push(Object.assign(it, { type: 'tree', tree: a.tree }));
+    else if (a.text || (a.hls && a.hls.length)) {
+      a.items.push(Object.assign(it, { type: 'text', text: a.text || '' }, a.hls ? { hls: a.hls } : {}));
+    }
+    ['type', 'text', 'tree', 'hls'].forEach((k) => delete a[k]);
+    return a;
+  }
+  // The notes of the question being shown, oldest first.
+  function notesInOrder() {
+    return anns(leftPid).filter((a) => a.kind === 'note').map(normNote)
+      .map((a, i) => [a, i]).sort((p, q) => noteTime(p[0]) - noteTime(q[0]) || p[1] - q[1]).map((p) => p[0]);
+  }
+  // The pane under a point given in layer pixels (the nearest one when the point is on neither).
+  function paneAt(x, y) {
+    const L = noteLayer().getBoundingClientRect();
+    const cx = L.left + x;
+    const cy = L.top + y;
+    const dist = (side) => {
+      const r = paneEl(side).getBoundingClientRect();
+      return Math.hypot(Math.max(r.left - cx, 0, cx - r.right), Math.max(r.top - cy, 0, cy - r.bottom));
+    };
+    return dist('right') < dist('left') ? 'right' : 'left';
+  }
+  function anchorAt(x, y) { // a point in layer pixels as { pane, x, y } in that pane's scrolling content
+    const pane = paneAt(x, y);
+    const L = noteLayer().getBoundingClientRect();
+    const el = paneEl(pane);
+    const r = el.getBoundingClientRect();
+    return { pane, x: Math.round(L.left + x - r.left + el.scrollLeft), y: Math.round(L.top + y - r.top + el.scrollTop) };
+  }
+  function notePos(a) { // where a note is drawn now, in layer pixels
+    const L = noteLayer().getBoundingClientRect();
+    const el = paneEl(a.pane);
+    const r = el.getBoundingClientRect();
+    return [Math.round(r.left - L.left + a.x - el.scrollLeft), Math.round(r.top - L.top + a.y - el.scrollTop)];
+  }
+  function nodeAt(tree, path) {
+    return path.split('.').slice(1).reduce((t, i) => (t && t.kids ? t.kids[Number(i)] : null), tree);
+  }
+  const itemOf = (a, itemId) => a.items.find((it) => it.id === itemId);
+
+  // Tidy layout: leaves left to right, each parent centered over its first and last branch.
+  function treeLayout(tree) {
+    const nodes = [];
+    const edges = [];
+    let leaves = 0;
+    let depth = 0;
+    (function walk(t, path, d) {
+      depth = Math.max(depth, d);
+      const kids = (t.kids || []).map((k, i) => walk(k, `${path}.${i}`, d + 1));
+      const x = kids.length ? (kids[0].x + kids[kids.length - 1].x) / 2 : TN.pad + TN.d / 2 + (leaves++) * (TN.d + TN.gapX);
+      const n = { t, path, x, y: TN.pad + TN.d / 2 + d * (TN.d + TN.gapY) };
+      nodes.push(n);
+      kids.forEach((k) => edges.push([n, k]));
+      return n;
+    })(tree, '0', 0);
+    return { nodes, edges, w: 2 * TN.pad + leaves * (TN.d + TN.gapX) - TN.gapX, h: 2 * TN.pad + TN.d + depth * (TN.d + TN.gapY) };
+  }
+  function edgeHTML([p, c], marker) {
+    const dx = c.x - p.x;
+    const dy = c.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const r = TN.d / 2;
+    return `<line x1="${r1(p.x + dx / len * r)}" y1="${r1(p.y + dy / len * r)}" x2="${r1(c.x - dx / len * (r + 1))}" y2="${r1(c.y - dy / len * (r + 1))}" marker-end="url(#${marker})"/>`;
+  }
+  function treeHTML(it) {
+    const L = treeLayout(it.tree);
+    const marker = `tn-arrow-${it.id}`;
+    return `<div class="tree-canvas" style="width:${L.w}px;height:${L.h}px">
+        <svg class="tree-edges" width="${L.w}" height="${L.h}" aria-hidden="true"><defs><marker id="${marker}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs>${L.edges.map((e) => edgeHTML(e, marker)).join('')}</svg>
+        ${L.nodes.map((n) => `<div class="tnode" data-path="${n.path}" style="left:${n.x - TN.d / 2}px;top:${n.y - TN.d / 2}px">
+          <input class="tnode-input${n.t.hl ? ' hl' : ''}" data-path="${n.path}" value="${esc(n.t.label)}" aria-label="${n.path === '0' ? 'Root label' : `Label of node ${esc(n.path.slice(2))}`}" autocomplete="off" spellcheck="false">
+          <button type="button" class="tnode-btn tnode-add" data-tn="add" title="Add a branch" aria-label="Add a branch">+</button>
+          ${n.path === '0' ? '' : '<button type="button" class="tnode-btn tnode-del" data-tn="del" title="Remove this node and everything below it" aria-label="Remove this node and everything below it">×</button>'}
+        </div>`).join('')}
+      </div>`;
+  }
+
+  // ── Where things are inside a note (body pixels, from the top-left corner of the note's canvas) ──
+  function itemSizes(el) { // text boxes are measured on screen; a tree's size comes from its layout
+    const out = {};
+    if (el) el.querySelectorAll('.nitem').forEach((n) => { out[n.dataset.item] = { w: n.offsetWidth, h: n.offsetHeight }; });
+    return out;
+  }
+  function itemRect(it, sizes) {
+    if (it.type === 'tree') { const L = treeLayout(it.tree); return { x: it.x, y: it.y, w: L.w, h: L.h + GRIP }; }
+    const s = sizes && sizes[it.id];
+    return { x: it.x, y: it.y, w: s ? s.w : TEXT_MIN, h: s ? s.h : GRIP + 27 };
+  }
+  // How wide text box `it` may get before it wraps: up to the note's right edge, or to the nearest item beside it.
+  function textRoom(a, it, sizes, bodyW) {
+    const me = itemRect(it, sizes);
+    let right = bodyW;
+    a.items.forEach((o) => {
+      if (o === it) return;
+      const r = itemRect(o, sizes);
+      if (r.x >= it.x + 12 && r.y < me.y + me.h + NOTE_GAP && me.y < r.y + r.h + NOTE_GAP) right = Math.min(right, r.x - NOTE_GAP);
+    });
+    return Math.max(TEXT_MIN, Math.floor(right - it.x));
+  }
+  function fitTexts(el, a, width) { // width: the note's width now (while resizing), else its saved one
+    const bodyW = (width || Math.max(a.w, parseFloat(el.style.width) || 0)) - 2 * NOTE_PAD - 2;
+    const sizes = itemSizes(el);
+    a.items.forEach((it) => {
+      const n = it.type === 'text' && el.querySelector(`.nitem[data-item="${it.id}"]`);
+      if (n) n.style.maxWidth = `${textRoom(a, it, sizes, bodyW)}px`;
+    });
+  }
+  const rectsOf = (a, sizes) => Object.fromEntries(a.items.map((it) => [it.id, itemRect(it, sizes)]));
+  const clash = (p, q) => p.x < q.x + q.w + NOTE_GAP && q.x < p.x + p.w + NOTE_GAP && p.y < q.y + q.h + NOTE_GAP && q.y < p.y + p.h + NOTE_GAP;
+  // The free spot nearest to `want` for item `id`: where it is, or just beside, above or below another item.
+  function freeSpot(rects, id, want) {
+    const me = rects[id];
+    const others = Object.keys(rects).filter((k) => k !== id).map((k) => rects[k]);
+    const wx = Math.max(0, Math.round(want.x));
+    const wy = Math.max(0, Math.round(want.y));
+    const fits = ([x, y]) => x >= 0 && y >= 0 && others.every((o) => !clash({ x, y, w: me.w, h: me.h }, o));
+    if (fits([wx, wy])) return { x: wx, y: wy };
+    const bottom = Math.max(0, ...others.map((o) => o.y + o.h + NOTE_GAP));
+    const spots = [[wx, bottom], [0, bottom]];
+    others.forEach((o) => spots.push([o.x - me.w - NOTE_GAP, wy], [o.x + o.w + NOTE_GAP, wy], [wx, o.y - me.h - NOTE_GAP],
+      [wx, o.y + o.h + NOTE_GAP], [o.x + o.w + NOTE_GAP, o.y], [o.x, o.y + o.h + NOTE_GAP]));
+    const [x, y] = spots.filter(fits).sort((p, q) => Math.hypot(p[0] - wx, p[1] - wy) - Math.hypot(q[0] - wx, q[1] - wy))[0];
+    return { x, y };
+  }
+  // Item `id` grew: push whatever it now reaches down below it (and so on). Returns true if anything moved.
+  function pushFrom(a, rects, id) {
+    const queue = [id];
+    let moved = false;
+    for (let n = 0; queue.length && n < 300; n++) {
+      const f = rects[queue.shift()];
+      a.items.forEach((it) => {
+        const r = rects[it.id];
+        if (it.id === id || r === f || !clash(f, r)) return;
+        r.y = it.y = f.y + f.h + NOTE_GAP;
+        moved = true;
+        queue.push(it.id);
+      });
+    }
+    return moved;
+  }
+  function strokeAbs(a, k) {
+    if (!k.item) return k.pts;
+    const it = itemOf(a, k.item);
+    return it ? k.pts.map(([x, y]) => [r1(x + it.x), r1(y + it.y)]) : null;
+  }
+  const inkHTML = (a) => (a.ink || []).map((k) => { const p = strokeAbs(a, k); return p ? `<path d="${strokePath(p)}"/>` : ''; }).join('');
+  // The smallest size that shows everything in the note.
+  function noteMinSize(el, a) {
+    let w = 0;
+    let h = 0;
+    const rects = rectsOf(a, itemSizes(el));
+    a.items.forEach((it) => { // a text box can wrap narrower, so it only needs its smallest width
+      const r = rects[it.id];
+      w = Math.max(w, r.x + (it.type === 'text' ? TEXT_MIN : r.w));
+      h = Math.max(h, r.y + r.h);
+    });
+    (a.ink || []).forEach((k) => (strokeAbs(a, k) || []).forEach(([x, y]) => { w = Math.max(w, x + 2); h = Math.max(h, y + 2); }));
+    const body = el.querySelector('.snote-body');
+    return { w: Math.ceil(Math.max(NOTE_MIN.w, w + 2 * NOTE_PAD + 2)), h: Math.ceil(Math.max(NOTE_MIN.h, (body ? body.offsetTop : 52) + h + 2 * NOTE_PAD + 2)) };
+  }
+
+  // ── Drawing notes ──
+  function itemHTML(a, it) {
+    const sel = noteSel[a.id] === it.id ? ' sel' : '';
+    const grip = '<span class="nitem-grip" title="Drag to move" aria-hidden="true"></span>';
+    if (it.type === 'tree') {
+      return `<div class="nitem nitem-tree${sel}" data-item="${it.id}" style="left:${it.x}px;top:${it.y}px">${grip}${treeHTML(it)}</div>`;
+    }
+    return `<div class="nitem nitem-text${sel}" data-item="${it.id}" style="left:${it.x}px;top:${it.y}px">${grip}<div class="snote-textwrap"><div class="snote-mirror" aria-hidden="true">${mirrorHTML(it)}</div><textarea class="snote-text" rows="1" aria-label="Note text" placeholder="Type…" spellcheck="false">${esc(it.text)}</textarea></div></div>`;
+  }
+  function noteHTML(a, n) {
+    const tool = toolOf(a.id);
+    const h = nhist(a.id);
+    if (noteSel[a.id] && !itemOf(a, noteSel[a.id])) delete noteSel[a.id];
+    const filled = a.items.length || (a.ink || []).length;
+    const btn = (k, label, extra) => `<button type="button" class="ann-btn" data-nt="${k}" title="${label}" aria-label="${label}" ${extra || ''}>${icon(k)}</button>`;
+    return `<div class="snote" data-aid="${a.id}" data-tool="${tool}" role="group" aria-label="Sticky note ${n}">
+        <div class="snote-bar" data-nd="move" title="Drag to move"><span class="snote-title">Note ${n}</span><span class="snote-btns"><button type="button" class="snote-hbtn" data-nd="min" title="Minimize" aria-label="Minimize note ${n}">–</button><button type="button" class="snote-hbtn snote-x" data-nd="delete" title="Delete this note" aria-label="Delete note ${n}">×</button></span></div>
+        <div class="snote-tools" role="toolbar" aria-label="Note ${n} tools">${NOTE_TOOLS.map(([k, label]) => btn(k, label, `aria-pressed="${tool === k}"`)).join('')}<span class="ann-sep" aria-hidden="true"></span>${btn('undo', 'Undo in this note', h.undo.length ? '' : 'disabled')}${btn('redo', 'Redo in this note', h.redo.length ? '' : 'disabled')}${btn('del', 'Delete selected', noteSel[a.id] ? '' : 'disabled')}${btn('clear', 'Clear this note', filled ? '' : 'disabled')}</div>
+        <div class="snote-body">${filled ? '' : '<p class="snote-empty">Type here, draw, or add a tree.</p>'}<div class="snote-canvas">${a.items.map((it) => itemHTML(a, it)).join('')}<svg class="snote-ink" aria-hidden="true">${inkHTML(a)}</svg></div></div>
+        <div class="snote-size" data-nd="size" title="Drag to resize"></div>
+      </div>`;
+  }
+  // The icons of the minimized notes of the question being shown, for #note-dock in the bottom bar.
+  function dockButtons() {
+    if (!leftPid) return '';
+    const order = notesInOrder();
+    const mins = minMap();
+    return order.map((a, i) => {
+      if (!mins[a.id]) return '';
+      const n = i + 1;
+      return `<button type="button" class="dock-note" data-nd="restore" data-aid="${a.id}" title="${ordinal(n)} note" aria-label="Open the ${ordinal(n)} note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v12l-6 6H3z"/><path d="M15 21v-6h6"/></svg><span class="dock-num">${n}</span></button>`;
+    }).join('');
+  }
+  const dockEl = () => document.getElementById('note-dock');
+  function renderNotes() {
+    const layer = noteLayer();
+    if (!layer || !leftPid) return;
+    const act = document.activeElement;
+    if (act && layer.contains(act)) act.blur();
+    const order = notesInOrder();
+    const mins = minMap();
+    layer.innerHTML = order.map((a, i) => (mins[a.id] ? '' : noteHTML(a, i + 1))).join('');
+    if (dockEl()) dockEl().innerHTML = dockButtons();
+    layoutNotes();
+  }
+  // The text again, behind the (transparent) text box, with the highlighted ranges marked. A trailing zero-width
+  // space keeps a final empty line the same height as in the text box.
+  function mirrorHTML(it) {
+    const text = it.text || '';
+    let out = '';
+    let at = 0;
+    (it.hls || []).map((h, i) => [h, i]).sort((x, y) => x[0][0] - y[0][0]).forEach(([[s0, e0], i]) => {
+      if (s0 < at) return;
+      out += esc(text.slice(at, s0)) + `<mark data-i="${i}">${esc(text.slice(s0, e0))}</mark>`;
+      at = e0;
+    });
+    return `${out}${esc(text.slice(at))}​`;
+  }
+  // Keep highlights on their words when the text changes: find what was replaced, shift what is after it,
+  // and drop a highlight whose words are all gone.
+  function shiftHls(hls, before, after) {
+    if (!hls || !hls.length) return hls;
+    let p = 0;
+    while (p < before.length && p < after.length && before[p] === after[p]) p++;
+    let q = 0;
+    while (q < before.length - p && q < after.length - p && before[before.length - 1 - q] === after[after.length - 1 - q]) q++;
+    const oldEnd = before.length - q;
+    const delta = after.length - before.length;
+    const added = after.length - q - p;
+    return hls.map(([s0, e0]) => [
+      s0 < p ? s0 : s0 >= oldEnd ? s0 + delta : p + added,
+      e0 <= p ? e0 : e0 >= oldEnd ? e0 + delta : p,
+    ]).filter(([s0, e0]) => e0 > s0);
+  }
+  function mergeHls(hls) {
+    const out = [];
+    hls.slice().sort((x, y) => x[0] - y[0]).forEach(([s0, e0]) => {
+      const last = out[out.length - 1];
+      if (last && s0 <= last[1]) last[1] = Math.max(last[1], e0); else out.push([s0, e0]);
+    });
+    return out;
+  }
+  function layoutNotes() {
+    const layer = noteLayer();
+    if (!layer || !leftPid) return;
+    anns(leftPid).forEach((a) => {
+      if (a.kind !== 'note' || !a.items) return;
+      const el = noteEl(a.id);
+      if (!el || (noteDrag && noteDrag.id === a.id)) return;
+      const [x, y] = notePos(a);
+      fitTexts(el, a);
+      const m = noteMinSize(el, a);
+      Object.assign(el.style, { left: `${x}px`, top: `${y}px`, width: `${Math.max(a.w, m.w)}px`, height: `${Math.max(a.h, m.h)}px` });
+    });
+  }
+  function placeItems(el, a) { // move items on screen to their stored spots, and their strokes with them
+    a.items.forEach((it) => {
+      const n = el.querySelector(`.nitem[data-item="${it.id}"]`);
+      if (n) Object.assign(n.style, { left: `${it.x}px`, top: `${it.y}px` });
+    });
+    el.querySelector('.snote-ink').innerHTML = inkHTML(a);
+  }
+  function syncNoteBtns(id) {
+    const el = noteEl(id);
+    const a = noteById(id);
+    if (!el || !a) return;
+    const h = nhist(id);
+    const set = (k, on) => { const b = el.querySelector(`[data-nt="${k}"]`); if (b) b.disabled = !on; };
+    set('undo', h.undo.length);
+    set('redo', h.redo.length);
+    set('del', !!itemOf(a, noteSel[id]));
+    set('clear', a.items.length || (a.ink || []).length);
+  }
+  function selectItem(id, itemId) {
+    const el = noteEl(id);
+    if (itemId) noteSel[id] = itemId; else delete noteSel[id];
+    if (el) el.querySelectorAll('.nitem').forEach((n) => n.classList.toggle('sel', n.dataset.item === itemId));
+    syncNoteBtns(id);
+  }
+  function focusNote(id, itemId, path) {
+    const el = noteEl(id);
+    const box = el && itemId && el.querySelector(`.nitem[data-item="${itemId}"]`);
+    const f = box && (path ? box.querySelector(`.tnode-input[data-path="${path}"]`) : box.querySelector('.snote-text'));
+    if (f) f.focus({ preventScroll: true });
+  }
+
+  // ── Changing notes ──
+  function recordNote(pid, before, after) {
+    record(pid, [{ op: 'remove', ann: before }, { op: 'add', ann: after }]);
+    const h = nhist(after.id);
+    h.undo.push({ before: cloneAnn(before), after: cloneAnn(after) });
+    h.redo = [];
+  }
+  function flushNoteEdit() {
+    if (!noteEdit) return;
+    const { pid, id, before } = noteEdit;
+    noteEdit = null;
+    const live = anns(pid).find((a) => a.id === id);
+    if (!live || !live.items) return;
+    const empty = live.items.filter((it) => it.type === 'text' && !it.text && !(it.hls && it.hls.length));
+    if (empty.length) { // a text box left empty goes away when it loses focus
+      const gone = new Set(empty.map((it) => it.id));
+      live.items = live.items.filter((it) => !gone.has(it.id));
+      if (live.ink) { live.ink = live.ink.filter((k) => !gone.has(k.item)); if (!live.ink.length) delete live.ink; }
+      const el = pid === leftPid && noteEl(id);
+      if (el) gone.forEach((itemId) => { const n = el.querySelector(`.nitem[data-item="${itemId}"]`); if (n) n.remove(); });
+      if (gone.has(noteSel[id])) delete noteSel[id];
+    }
+    if (JSON.stringify(live) !== JSON.stringify(before)) recordNote(pid, before, cloneAnn(live));
+    if (pid === leftPid) syncNoteBtns(id);
+  }
+  // Apply a change to a copy of note `id` and record it as one step.
+  function changeNote(id, fn) {
+    flushNoteEdit();
+    const live = noteById(id);
+    if (!live) return null;
+    const before = cloneAnn(live);
+    const after = cloneAnn(live);
+    const out = fn(after);
+    if (JSON.stringify(before) === JSON.stringify(after)) return out;
+    applyOps(leftPid, [{ op: 'remove', ann: before }, { op: 'add', ann: after }]);
+    recordNote(leftPid, before, after);
+    return out;
+  }
+  // The note's own undo / redo. A step only applies if the note still looks the way that step left it (the main
+  // toolbar's undo may have changed it since); otherwise the note's history is out of date and is dropped.
+  function noteUndo(id, isRedo) {
+    flushNoteEdit();
+    const live = noteById(id);
+    const h = nhist(id);
+    const from = isRedo ? h.redo : h.undo;
+    const step = from[from.length - 1];
+    if (!live || !step) return;
+    if (JSON.stringify(live) !== JSON.stringify(isRedo ? step.before : step.after)) {
+      h.undo = [];
+      h.redo = [];
+      syncNoteBtns(id);
+      announce('This note was changed with the main Undo, so its own undo history was reset.');
+      return;
+    }
+    from.pop();
+    (isRedo ? h.undo : h.redo).push(step);
+    const ops = [{ op: 'remove', ann: cloneAnn(live) }, { op: 'add', ann: cloneAnn(isRedo ? step.after : step.before) }];
+    applyOps(leftPid, ops);
+    record(leftPid, ops);
+  }
+  function canvasPoint(el, e) {
+    const c = el.querySelector('.snote-canvas').getBoundingClientRect();
+    return [r1(e.clientX - c.left), r1(e.clientY - c.top)];
+  }
+  // A new text box at a point of note `id` (or the nearest free spot), ready to type. It is kept only if something is
+  // typed in it, and adding it plus the typing is one undo step.
+  function startText(id, [x, y]) {
+    flushNoteEdit();
+    const layer = noteLayer();
+    if (document.activeElement && layer.contains(document.activeElement)) document.activeElement.blur();
+    const live = noteById(id);
+    const el = noteEl(id);
+    if (!live || !el) return;
+    const it = { id: newId(), type: 'text', x: 0, y: 0, text: '' };
+    const rects = rectsOf(live, itemSizes(el));
+    rects[it.id] = itemRect(it);
+    Object.assign(it, freeSpot(rects, it.id, { x, y: y - GRIP - 4 }));
+    noteEdit = { pid: leftPid, id, before: cloneAnn(live) };
+    live.items.push(it);
+    noteSel[id] = it.id;
+    renderNotes();
+    focusNote(id, it.id);
+  }
+  function startTree(id, [x, y]) {
+    const sizes = itemSizes(noteEl(id));
+    noteTool[id] = 'select';
+    const itemId = changeNote(id, (a) => {
+      const it = { id: newId(), type: 'tree', x: 0, y: 0, tree: { label: '', kids: [] } };
+      const rects = rectsOf(a, sizes);
+      rects[it.id] = itemRect(it);
+      Object.assign(it, freeSpot(rects, it.id, { x: x - TN.pad - TN.d / 2, y: y - GRIP - TN.pad - TN.d / 2 }));
+      a.items.push(it);
+      return it.id;
+    });
+    if (!itemId) return;
+    selectItem(id, itemId);
+    renderNotes();
+    focusNote(id, itemId, '0');
+    announce('Tree added. Type the root label; + on a node adds a branch.');
+  }
+  function setNoteTool(id, k) {
+    if (k === 'pen' || k === 'eraser') flushNoteEdit();
+    noteTool[id] = toolOf(id) === k && k !== 'select' ? 'select' : k;
+    const el = noteEl(id);
+    if (!el) return;
+    el.dataset.tool = noteTool[id];
+    el.querySelectorAll('.snote-tools [aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.nt === noteTool[id])));
+  }
+  // The note button makes a note right away, in the middle of the work area (both panes). If another note already
+  // starts there, the new one steps down and to the right so it doesn't hide it.
+  function createNote() {
+    const layer = noteLayer();
+    if (!layer || !leftPid) return;
+    flushNoteEdit();
+    let px = Math.round((layer.clientWidth - NOTE_NEW.w) / 2);
+    let py = Math.round((layer.clientHeight - NOTE_NEW.h) / 2);
+    const taken = () => [...layer.querySelectorAll('.snote')].some((n) => Math.abs(n.offsetLeft - px) < 12 && Math.abs(n.offsetTop - py) < 12);
+    for (let i = 0; i < 12 && taken(); i++) { px += 28; py += 28; }
+    px = Math.max(0, Math.min(px, layer.clientWidth - NOTE_NEW.w));
+    py = Math.max(0, Math.min(py, layer.clientHeight - NOTE_NEW.h));
+    const a = Object.assign({ id: newId(), kind: 'note' }, anchorAt(px, py), NOTE_NEW, { t: Date.now(), items: [] });
+    if (['pen', 'eraser'].includes(ui.annMode)) setAnnMode('none'); // type in the new note, not draw on the page
+    commit(leftPid, [{ op: 'add', ann: a }]);
+    startText(a.id, [0, GRIP]);
+    announce('Note added. Type, or use its toolbar to highlight, draw or add a tree.');
+  }
+
+  // ── Minimizing: a note is pulled into its numbered icon in the bottom-left corner, and pushed back out of it ──
+  const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function genie(el, to, closing) {
+    if (!el.animate) return null;
+    if (reduceMotion()) return el.animate(closing ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: 1 }], { duration: 160, fill: closing ? 'forwards' : 'none' });
+    const r = el.getBoundingClientRect();
+    const ox = to.left + to.width / 2 - r.left;
+    const oy = to.top + to.height / 2 - r.top;
+    const fx = Math.max(0, Math.min(100, (ox / Math.max(1, r.width)) * 100));
+    const pinch = (k) => `polygon(0% 0%, 100% 0%, ${(100 - (100 - fx) * k).toFixed(1)}% 100%, ${(fx * k).toFixed(1)}% 100%)`;
+    const frames = [
+      { transform: 'none', clipPath: pinch(0), opacity: 1, offset: 0 },
+      { transform: 'scale(.9, .78)', clipPath: pinch(0.8), opacity: 1, offset: 0.45 },
+      { transform: 'scale(.04)', clipPath: pinch(1), opacity: 0.3, offset: 1 },
+    ];
+    el.style.transformOrigin = `${r1(ox)}px ${r1(oy)}px`;
+    const anim = el.animate(closing ? frames : frames.slice().reverse().map((f) => Object.assign({}, f, { offset: 1 - f.offset })),
+      { duration: 440, easing: closing ? 'cubic-bezier(.55, 0, .8, .3)' : 'cubic-bezier(.2, .7, .45, 1)', fill: closing ? 'forwards' : 'none' });
+    if (!closing) anim.finished.then(() => { el.style.transformOrigin = ''; }, () => {});
+    return anim;
+  }
+  function pulse(el) { if (el && el.animate && !reduceMotion()) el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 260 }); }
+  // A copy of a note, fixed over the whole page, to animate on its way to or from the bottom bar (the note layer
+  // stops above the bar and would cut it off).
+  function ghostOf(el) {
+    const r = el.getBoundingClientRect();
+    const ghost = el.cloneNode(true);
+    const fields = el.querySelectorAll('textarea, input');
+    ghost.querySelectorAll('textarea, input').forEach((f, i) => { f.value = fields[i].value; f.tabIndex = -1; });
+    ghost.classList.add('snote-ghost');
+    ghost.removeAttribute('data-aid');
+    ghost.setAttribute('aria-hidden', 'true');
+    Object.assign(ghost.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, visibility: 'visible' });
+    document.body.appendChild(ghost);
+    return ghost;
+  }
+  const dockBtn = (id) => document.querySelector(`#note-dock .dock-note[data-aid="${id}"]`);
+  function minimizeNote(id) {
+    flushNoteEdit();
+    const el = noteEl(id);
+    if (!el) return;
+    const ghost = ghostOf(el); // the note as it looks now, pulled into its icon while the real one is gone
+    const n = notesInOrder().findIndex((a) => a.id === id) + 1;
+    minMap()[id] = true;
+    delete noteSel[id];
+    save();
+    renderNotes();
+    const dock = dockBtn(id);
+    const done = () => { ghost.remove(); pulse(dock); };
+    const anim = dock && genie(ghost, dock.getBoundingClientRect(), true);
+    if (anim) anim.finished.then(done, done); else done();
+    announce(`${ordinal(n)} note minimized. Its icon is in the bar at the bottom.`);
+  }
+  function restoreNote(id) {
+    const a = noteById(id);
+    const dock = dockBtn(id);
+    if (!a) return;
+    const from = dock && dock.getBoundingClientRect();
+    pulse(dock);
+    delete minMap()[id];
+    save();
+    const pane = paneEl(a.pane); // bring it into view if its side has scrolled away from it
+    if (a.y < pane.scrollTop || a.y > pane.scrollTop + pane.clientHeight - 60) pane.scrollTop = Math.max(0, a.y - 40);
+    renderNotes();
+    const el = noteEl(id);
+    if (!el || !from) return;
+    el.style.visibility = 'hidden'; // a copy comes out of the icon, then the real note shows
+    const ghost = ghostOf(el);
+    const done = () => { ghost.remove(); el.style.visibility = ''; };
+    const anim = genie(ghost, from, false);
+    if (anim) anim.finished.then(done, done); else done();
+  }
+  function onDockClick(e) {
+    const b = e.target.closest && e.target.closest('#note-dock [data-nd="restore"]');
+    if (b && leftPid) restoreNote(b.dataset.aid);
+  }
+
+  // ── Pointer and keyboard ──
+  function onNoteClick(e) {
+    const sn = e.target.closest('.snote');
+    const id = sn && sn.dataset.aid;
+    const live = id && noteById(id);
+    if (!live) return;
+    const tool = toolOf(id);
+    const nt = e.target.closest('[data-nt]');
+    if (nt) {
+      if (nt.disabled) return;
+      const k = nt.dataset.nt;
+      if (NOTE_TOOLS.some(([t]) => t === k)) setNoteTool(id, k);
+      else if (k === 'undo' || k === 'redo') noteUndo(id, k === 'redo');
+      else if (k === 'del') {
+        const sel = noteSel[id];
+        changeNote(id, (a) => {
+          a.items = a.items.filter((it) => it.id !== sel);
+          if (a.ink) { a.ink = a.ink.filter((s) => s.item !== sel); if (!a.ink.length) delete a.ink; }
+        });
+        selectItem(id, null);
+        announce('Deleted. Use Undo to bring it back.');
+      } else if (k === 'clear') {
+        flushNoteEdit();
+        if (!confirm('Clear everything in this note?')) return;
+        changeNote(id, (a) => { a.items = []; delete a.ink; });
+        announce('Note cleared. Use Undo to bring it back.');
+      }
+      return;
+    }
+    const nd = e.target.closest('[data-nd]');
+    if (nd) {
+      if (nd.dataset.nd === 'min') minimizeNote(id);
+      if (nd.dataset.nd === 'delete') {
+        flushNoteEdit();
+        const n = noteById(id);
+        if (n) { delete minMap()[id]; commit(leftPid, [{ op: 'remove', ann: n }]); announce('Note deleted. Use Undo to bring it back.'); }
+      }
+      return;
+    }
+    const box = e.target.closest('.nitem');
+    const node = tool === 'hl' && e.target.closest('.tnode-input');
+    if (node && box) { // highlighter on: a click highlights the whole node, or takes the highlight off
+      const path = node.dataset.path;
+      let on = false;
+      changeNote(id, (a) => { const t = nodeAt(itemOf(a, box.dataset.item).tree, path); on = t.hl = !t.hl; if (!on) delete t.hl; });
+      announce(on ? 'Node highlighted.' : 'Highlight removed.');
+      return;
+    }
+    const tn = e.target.closest('[data-tn]');
+    if (tn && box) {
+      const itemId = box.dataset.item;
+      const path = tn.closest('.tnode').dataset.path;
+      if (tn.dataset.tn === 'add') {
+        const sizes = itemSizes(sn);
+        const focus = changeNote(id, (a) => {
+          const t = nodeAt(itemOf(a, itemId).tree, path);
+          t.kids.push({ label: '', kids: [] });
+          pushFrom(a, rectsOf(a, sizes), itemId); // a wider or taller tree moves what it now reaches
+          return `${path}.${t.kids.length - 1}`;
+        });
+        if (focus) focusNote(id, itemId, focus);
+      } else {
+        const parent = path.slice(0, path.lastIndexOf('.'));
+        changeNote(id, (a) => { nodeAt(itemOf(a, itemId).tree, parent).kids.splice(Number(path.slice(path.lastIndexOf('.') + 1)), 1); });
+        focusNote(id, itemId, parent);
+        announce('Branch removed. Use Undo to bring it back.');
+      }
+      return;
+    }
+    if (!e.target.closest('.snote-body') || box) return;
+    const skip = noteClickSkip === id;
+    noteClickSkip = null;
+    if (tool === 'tree') startTree(id, canvasPoint(sn, e));
+    else if (tool === 'select') { if (skip) selectItem(id, null); else startText(id, canvasPoint(sn, e)); }
+  }
+  function onNoteInput(e) {
+    const el = e.target;
+    const sn = el.closest('.snote');
+    const box = el.closest('.nitem');
+    const live = sn && noteById(sn.dataset.aid);
+    const it = live && box && itemOf(live, box.dataset.item);
+    if (!it) return;
+    if (!noteEdit || noteEdit.id !== live.id) { flushNoteEdit(); noteEdit = { pid: leftPid, id: live.id, before: cloneAnn(live) }; }
+    if (el.classList.contains('snote-text')) {
+      it.hls = shiftHls(it.hls, it.text || '', el.value);
+      if (it.hls && !it.hls.length) delete it.hls;
+      it.text = el.value;
+      el.previousElementSibling.innerHTML = mirrorHTML(it); // the box grows with its mirror, then wraps at its room
+      fitTexts(sn, live);
+      if (pushFrom(live, rectsOf(live, itemSizes(sn)), it.id)) placeItems(sn, live); // a taller text box moves what is below it
+      layoutNotes(); // and the note grows if it has to
+    } else if (el.classList.contains('tnode-input')) { const n = nodeAt(it.tree, el.dataset.path); if (n) n.label = el.value; }
+    saveSoon();
+  }
+  function onNoteSelect(e) { // highlighter on: selecting text in a text box highlights it
+    const ta = e.target;
+    if (!ta.matches || !ta.matches('.snote-text') || ta.selectionEnd <= ta.selectionStart) return;
+    const id = ta.closest('.snote').dataset.aid;
+    if (toolOf(id) !== 'hl') return;
+    const itemId = ta.closest('.nitem').dataset.item;
+    const range = [ta.selectionStart, ta.selectionEnd];
+    changeNote(id, (a) => { const it = itemOf(a, itemId); if (it) it.hls = mergeHls([...(it.hls || []), range]); });
+  }
+  function onNoteKey(e) {
+    if (e.key === 'Escape' && e.target.closest('.snote')) { e.target.blur(); e.stopPropagation(); }
+  }
+  // Erase what is under the pointer on note `live`: strokes, highlighted text, highlighted nodes. Updates the note in
+  // place (the drag keeps its pointer capture); the whole drag is recorded as one step on release.
+  function eraseOnNote(live, el, e) {
+    const [x, y] = canvasPoint(el, e);
+    let hit = false;
+    const near = (k) => {
+      const p = strokeAbs(live, k);
+      return !!p && (p.length === 1 ? Math.hypot(x - p[0][0], y - p[0][1]) < 9 : p.some((pt, i) => i && distToSegment(x, y, p[i - 1], pt) < 9));
+    };
+    if ((live.ink || []).some(near)) { live.ink = live.ink.filter((k) => !near(k)); hit = true; }
+    const inRect = (n) => [...n.getClientRects()].some((r) => e.clientX >= r.left - 2 && e.clientX <= r.right + 2 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2);
+    el.querySelectorAll('.nitem-text').forEach((box) => {
+      const it = itemOf(live, box.dataset.item);
+      const gone = [...box.querySelectorAll('.snote-mirror mark')].filter(inRect).map((m) => Number(m.dataset.i));
+      if (!it || !gone.length) return;
+      it.hls = it.hls.filter((h, i) => !gone.includes(i));
+      if (!it.hls.length) delete it.hls;
+      box.querySelector('.snote-mirror').innerHTML = mirrorHTML(it);
+      hit = true;
+    });
+    el.querySelectorAll('.tnode-input.hl').forEach((inp) => {
+      const it = itemOf(live, inp.closest('.nitem').dataset.item);
+      const n = inRect(inp) && it && nodeAt(it.tree, inp.dataset.path);
+      if (n) { delete n.hl; inp.classList.remove('hl'); hit = true; }
+    });
+    if (!hit) return;
+    noteInk.changed = true;
+    if (live.ink && !live.ink.length) delete live.ink;
+    el.querySelector('.snote-ink').innerHTML = inkHTML(live);
+  }
+  function onNoteDown(e) {
+    if (e.button !== 0) return;
+    const sn = e.target.closest('.snote');
+    const id = sn && sn.dataset.aid;
+    const live = id && noteById(id);
+    if (!live) return;
+    const h = e.target.closest('[data-nd="move"], [data-nd="size"]');
+    if (h) { // moving or resizing the note
+      if (e.target.closest('.snote-hbtn')) return;
+      e.preventDefault();
+      flushNoteEdit();
+      if (document.activeElement && sn.contains(document.activeElement)) document.activeElement.blur();
+      if (h.setPointerCapture) h.setPointerCapture(e.pointerId);
+      noteDrag = { id, kind: h.dataset.nd, el: sn, start: [e.clientX, e.clientY], moved: false,
+        orig: { x: sn.offsetLeft, y: sn.offsetTop, w: sn.offsetWidth, h: sn.offsetHeight }, min: noteMinSize(sn, live) };
+      sn.classList.add('dragging');
+      return;
+    }
+    if (!e.target.closest('.snote-body')) return;
+    const tool = toolOf(id);
+    if (tool === 'pen' || tool === 'eraser') { // drawing or erasing on the note
+      e.preventDefault();
+      flushNoteEdit();
+      if (sn.setPointerCapture) sn.setPointerCapture(e.pointerId);
+      if (tool === 'pen') {
+        noteInk = { id, kind: 'pen', el: sn, pts: [canvasPoint(sn, e)] };
+        sn.querySelector('.snote-ink').insertAdjacentHTML('beforeend', `<path class="live" d="${strokePath(noteInk.pts)}"/>`);
+      } else {
+        noteInk = { id, kind: 'eraser', el: sn, before: cloneAnn(live), changed: false };
+        eraseOnNote(live, sn, e);
+      }
+      return;
+    }
+    if (tool !== 'select') return;
+    const box = e.target.closest('.nitem');
+    if (!box) { noteClickSkip = (noteEdit && noteEdit.id === id) || noteSel[id] ? id : null; return; }
+    const grab = e.target.closest('.nitem-grip') || (box.classList.contains('nitem-tree') && !e.target.closest('.tnode'));
+    if (!grab) { selectItem(id, box.dataset.item); return; }
+    e.preventDefault();
+    flushNoteEdit();
+    if (document.activeElement && sn.contains(document.activeElement)) document.activeElement.blur();
+    const now = noteById(id);
+    const it = now && itemOf(now, box.dataset.item);
+    if (!it) return;
+    selectItem(id, it.id);
+    if (sn.setPointerCapture) sn.setPointerCapture(e.pointerId);
+    itemDrag = { id, item: it.id, el: box, noteEl: sn, start: [e.clientX, e.clientY], orig: { x: it.x, y: it.y },
+      before: cloneAnn(now), sizes: itemSizes(sn), moved: false };
+    box.classList.add('dragging');
+  }
+  function onNoteMove(e) {
+    if (noteInk) {
+      const k = noteInk;
+      if (k.kind === 'pen') {
+        const pt = canvasPoint(k.el, e);
+        const last = k.pts[k.pts.length - 1];
+        if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 1.5) return;
+        k.pts.push(pt);
+        const lp = k.el.querySelector('.snote-ink path.live');
+        if (lp) lp.setAttribute('d', strokePath(k.pts));
+      } else {
+        const live = noteById(k.id);
+        if (live) eraseOnNote(live, k.el, e);
+      }
+      return;
+    }
+    if (itemDrag) { // the item follows the pointer; a red outline warns when it is on top of another one
+      const d = itemDrag;
+      const dx = e.clientX - d.start[0];
+      const dy = e.clientY - d.start[1];
+      if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+      const live = noteById(d.id);
+      const it = live && itemOf(live, d.item);
+      if (!it) return;
+      it.x = Math.max(0, Math.round(d.orig.x + dx));
+      it.y = Math.max(0, Math.round(d.orig.y + dy));
+      placeItems(d.noteEl, live);
+      const rects = rectsOf(live, d.sizes);
+      d.el.classList.toggle('clash', Object.keys(rects).some((k) => k !== d.item && clash(rects[d.item], rects[k])));
+      layoutNotes();
+      return;
+    }
+    const d = noteDrag;
+    if (!d) return;
+    const dx = e.clientX - d.start[0];
+    const dy = e.clientY - d.start[1];
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+    if (d.kind === 'move') { // anywhere in the work area, keeping the top bar on screen
+      const layer = noteLayer();
+      d.el.style.left = `${Math.round(Math.max(0, Math.min(d.orig.x + dx, layer.clientWidth - 60)))}px`;
+      d.el.style.top = `${Math.round(Math.max(0, Math.min(d.orig.y + dy, layer.clientHeight - 24)))}px`;
+    } else { // never smaller than what is in the note; nothing inside moves, text boxes rewrap to the new width
+      const live = noteById(d.id);
+      const w = Math.round(Math.max(d.min.w, d.orig.w + dx));
+      d.el.style.width = `${w}px`;
+      if (live) { fitTexts(d.el, live, w); d.min = noteMinSize(d.el, live); }
+      d.el.style.height = `${Math.round(Math.max(d.min.h, d.orig.h + dy))}px`;
+    }
+  }
+  function onNoteUp() {
+    if (noteInk) {
+      const k = noteInk;
+      noteInk = null;
+      const live = noteById(k.id);
+      if (!live) return;
+      if (k.kind === 'pen') { // a stroke that starts on a text box or tree belongs to it and moves with it
+        const sizes = itemSizes(k.el);
+        changeNote(k.id, (a) => {
+          const [x0, y0] = k.pts[0];
+          const rects = rectsOf(a, sizes);
+          const on = a.items.find((it) => { const r = rects[it.id]; return x0 >= r.x && x0 <= r.x + r.w && y0 >= r.y && y0 <= r.y + r.h; });
+          const pts = on ? k.pts.map(([x, y]) => [r1(x - on.x), r1(y - on.y)]) : k.pts;
+          a.ink = [...(a.ink || []), Object.assign({ id: newId(), pts }, on ? { item: on.id } : {})];
+        });
+      } else if (k.changed) { recordNote(leftPid, k.before, cloneAnn(live)); renderNotes(); }
+      return;
+    }
+    if (itemDrag) { // dropped on top of something: slide to the nearest free spot
+      const d = itemDrag;
+      itemDrag = null;
+      d.el.classList.remove('dragging', 'clash');
+      const live = noteById(d.id);
+      const it = live && itemOf(live, d.item);
+      if (!it || !d.moved) { if (it) Object.assign(it, d.orig); return; }
+      Object.assign(it, freeSpot(rectsOf(live, d.sizes), d.item, { x: it.x, y: it.y }));
+      if (JSON.stringify(live) !== JSON.stringify(d.before)) recordNote(leftPid, d.before, cloneAnn(live));
+      renderNotes();
+      return;
+    }
+    const d = noteDrag;
+    if (!d) return;
+    noteDrag = null;
+    d.el.classList.remove('dragging');
+    if (!d.moved || !noteById(d.id)) { layoutNotes(); return; }
+    const sizes = itemSizes(d.el);
+    changeNote(d.id, (a) => {
+      if (d.kind === 'move') Object.assign(a, anchorAt(d.el.offsetLeft, d.el.offsetTop));
+      else { // a text box that rewrapped taller pushes what it now reaches downward
+        a.w = d.el.offsetWidth;
+        a.h = d.el.offsetHeight;
+        const rects = rectsOf(a, sizes);
+        a.items.forEach((it) => { if (it.type === 'text') pushFrom(a, rects, it.id); });
+      }
+    });
+  }
+  // The layer and both panes belong to the practice screen and outlive a question, so they are wired once each.
+  let dockWired = false;
+  function wireNotes() {
+    if (!dockWired) { dockWired = true; document.addEventListener('click', onDockClick); } // the bottom bar is redrawn often
+    const layer = noteLayer();
+    if (!layer || layer.dataset.wired) return;
+    layer.dataset.wired = '1';
+    ['pane-left', 'pane-right'].forEach((id) => document.getElementById(id).addEventListener('scroll', layoutNotes, { passive: true }));
+    layer.addEventListener('mousedown', (e) => { if (e.target.closest('.snote-tools button, .snote-hbtn')) e.preventDefault(); }); // keep typing focus
+    layer.addEventListener('click', onNoteClick);
+    layer.addEventListener('input', onNoteInput);
+    layer.addEventListener('focusout', (e) => { if (e.target.matches('.snote-text, .tnode-input')) flushNoteEdit(); });
+    layer.addEventListener('keydown', onNoteKey);
+    layer.addEventListener('mouseup', onNoteSelect);
+    layer.addEventListener('keyup', onNoteSelect);
+    layer.addEventListener('pointerdown', onNoteDown);
+    layer.addEventListener('pointermove', onNoteMove);
+    layer.addEventListener('pointerup', onNoteUp);
+    layer.addEventListener('pointercancel', onNoteUp);
   }
 
   // ───────────────────────────── Diagram workspace (right pane) ─────────────────────────────
@@ -1673,9 +2526,8 @@
       ${open ? `<div class="dd-panel" role="group" aria-label="${esc(label)}">${body}</div>` : ''}
     </div>`;
   }
-  const OUT_OF_SCOPE_LABEL = 'Not in scope for this semester';
-  function optRow(type, pref, value, label, on, extra, disabled, cls) {
-    return `<label class="dd-opt${disabled ? ' disabled' : ''}${cls ? ` ${cls}` : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+  function optRow(type, pref, value, label, on, extra, disabled) {
+    return `<label class="dd-opt${disabled ? ' disabled' : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
       <span class="dd-txt">${esc(label)}</span>${extra ? `<span class="dd-extra">${extra}</span>` : ''}</label>`;
   }
   function summarize(selected, all, nameOf, allLabel) {
@@ -1747,8 +2599,7 @@
 
     const topicName = (id) => TOPICS.find((t) => t.id === id).name;
     const topicsBody = `<div class="dd-tools"><button class="link" data-action="topics-all">Select all</button><button class="link" data-action="topics-none">Clear</button></div>
-      <div class="dd-list cols">${TOPICS.map((t) => {
-        if (OUT_TOPICS.has(t.id)) return optRow('checkbox', 'topics', t.id, t.name, false, OUT_OF_SCOPE_LABEL, true, 'out-of-scope');
+      <div class="dd-list cols">${TOPICS.filter((t) => !OUT_TOPICS.has(t.id)).map((t) => {
         const count = problemsOf(base.filter((q) => q.topics.includes(t.id))).length;
         return optRow('checkbox', 'topics', t.id, t.name, p.topics.includes(t.id), count ? String(count) : 'soon', !count);
       }).join('')}</div>
@@ -1869,9 +2720,7 @@
     } else {
       const avail = TOPICS.filter((t) => Object.keys(PROBLEMS).some((pid) => groupTopics(pid).includes(t.id)));
       config = `<div class="chips" role="group" aria-label="Filter by topic">${avail.map((t) =>
-        `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}
-        ${TOPICS.filter((t) => OUT_TOPICS.has(t.id)).map((t) => `<span class="chip chip-out" id="xt-${t.id}" title="${OUT_OF_SCOPE_LABEL}">${esc(t.name)} · ${OUT_OF_SCOPE_LABEL.toLowerCase()}</span>`).join('')}
-        ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
+        `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}        ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
         <input type="search" id="exam-search" class="pick-search" placeholder="Search by name, exam, or question number" value="${esc(ui.examQuery)}" aria-label="Search questions" autocomplete="off">
         <div class="pick-cols">
           <div class="pick-list" id="pick-list" role="group" aria-label="Questions">${pickListHTML()}</div>
@@ -1931,6 +2780,7 @@
     hl:'<path d="M4 15l3 3M5 16l8.5-8.5 3 3L8 19H5z" /><path d="M13.5 7.5l2-2 3 3-2 2" /><path d="M3 21h8" stroke="#e9c400" stroke-width="3"/>',
     pen: '<path d="M4 20l1-4L16 5l3 3L8 19z" /><path d="M14 7l3 3" />',
     eraser: '<path d="M8 20h11" /><path d="M5 15l8-9 6 6-6 7H9z" /><path d="M9 11l6 6" />',
+    note: '<path d="M4 4h16v10l-6 6H4z" /><path d="M14 20v-6h6" /><path d="M8 9h8M8 12.5h4" />',
     undo: '<path d="M9 7L5 11l4 4" /><path d="M5 11h9a5 5 0 010 10h-3" />',
     redo: '<path d="M15 7l4 4-4 4" /><path d="M19 11h-9a5 5 0 000 10h3" />',
     clear: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />',
@@ -1938,6 +2788,7 @@
     arrow: '<path d="M4 20L20 4" /><path d="M11 4h9v9" />',
     list: '<path d="M2 8h20v8H2zM9 8v8M15 8v8" />',
     del: '<path d="M6 6l12 12M18 6L6 18" />',
+    tree: '<circle cx="12" cy="5" r="2.6" /><circle cx="6" cy="18.5" r="2.6" /><circle cx="18" cy="18.5" r="2.6" /><path d="M10.7 7.4l-3.4 8.7M13.3 7.4l3.4 8.7" />',
     home: '<path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />',
     play: '<rect class="yt-box" x="1.5" y="4.5" width="21" height="15" rx="4.5" /><path class="yt-tri" d="M10 8.6v6.8l5.8-3.4z" />', // YouTube-style play mark (monochrome)
     video: '<rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10.5l5-3v9l-5-3z" />',
@@ -1964,6 +2815,7 @@
         ${tool('hl', 'Highlighter (select text)', 'aria-pressed="false"')}
         ${tool('pen', 'Red pen', 'aria-pressed="false"')}
         ${tool('eraser', 'Eraser', 'aria-pressed="false"')}
+        ${tool('note', 'New sticky note')}
         <span class="ann-sep" aria-hidden="true"></span>
         ${tool('undo', 'Undo')}${tool('redo', 'Redo')}
         ${tool('clear', 'Clear all annotations')}
@@ -2184,6 +3036,10 @@
   // the text selection and the scroll position are never wiped by ordinary re-renders.
   function buildLeft(g) {
     const pane = document.getElementById('pane-left');
+    flushNoteEdit(); // typing in a note of the question being left
+    noteDrag = null;
+    itemDrag = null;
+    noteInk = null;
     detachEditors();
     if (leftObserver) leftObserver.disconnect();
     pane.innerHTML = renderLeft(g);
@@ -2193,6 +3049,8 @@
     renderProse(g.pid, 'intro');
     renderProse(g.pid, 'outro');
     layoutStrokes();
+    renderNotes();
+    wireNotes();
     buildDiagram(g);
     const art = article();
     const svg = art.querySelector('.annot-layer');
@@ -2421,6 +3279,7 @@
     ['hl', 'Highlighter', 'Select text or code to highlight what matters.'],
     ['pen', 'Red pen', 'Draw or write on the problem.'],
     ['eraser', 'Eraser', 'Click or drag over a mark to remove it.'],
+    ['note', 'Sticky note', 'A note appears in the middle of the page, ready to type; its own toolbar can highlight, draw and add a tree. Drag its top bar to move it, its corner to resize it, and – to tuck it into the bottom bar.'],
     ['undo', 'Undo', 'Take back your last change.'],
     ['redo', 'Redo', 'Bring back what you undid.'],
     ['clear', 'Clear', 'Remove every mark on this question.'],
@@ -2485,7 +3344,7 @@
     const left = review ? '<button class="btn btn-ghost" data-action="exam-results">← Results</button>'
       : exam ? '<button class="btn" data-action="save-leave">Save &amp; Leave</button>'
       : '<button class="btn btn-ghost" data-action="home">← Exit</button>';
-    return `<div class="left">${left}</div>
+    return `<div class="left">${left}<div class="note-dock" id="note-dock" role="toolbar" aria-label="Minimized notes">${dockButtons()}</div></div>
       <div class="center"><button class="nav-toggle" id="nav-toggle" data-action="toggle-nav" aria-expanded="${ui.navOpen}" aria-haspopup="dialog"${ui.navOpen ? ' aria-controls="navigator"' : ''}>Question ${s.index + 1} of ${s.groups.length} <span aria-hidden="true">${ui.navOpen ? '▾' : '▴'}</span></button></div>
       <div class="right">${right}</div>
       ${ui.navOpen ? renderNavigator(s, !exam) : ''}`;
@@ -2498,6 +3357,7 @@
       <div class="p-main">
         <div class="pane pane-left" id="pane-left"></div>
         <div class="pane pane-right" id="pane-right"><div id="diagram-slot"></div><div id="right-body"></div></div>
+        <div class="note-layer" id="note-layer"></div>
       </div>
       <footer class="p-footer${isExam(s) ? ' exam' : ''}" id="p-footer">${footerHTML(s)}</footer>
     </div>`;
@@ -3039,20 +3899,22 @@
     if (k === 'hl') {
       if (highlightSelection()) { if (ui.annMode !== 'hl') setAnnMode('hl'); } else setAnnMode('hl');
     } else if (k === 'pen' || k === 'eraser') setAnnMode(k);
+    else if (k === 'note') createNote();
     else if (k === 'settings') setSettingsOpen(document.getElementById('exam-settings').hidden);
     else if (k === 'autofill') toggleAutoFill();
-    else if (k === 'undo') undo(leftPid);
-    else if (k === 'redo') redo(leftPid);
+    else if (k === 'undo') { flushNoteEdit(); undo(leftPid); }
+    else if (k === 'redo') { flushNoteEdit(); redo(leftPid); }
     else if (k === 'clear') {
+      flushNoteEdit();
       const list = anns(leftPid);
-      if (!list.length || !confirm('Clear all highlights and drawings for this question?')) return;
+      if (!list.length || !confirm('Clear all highlights, drawings and sticky notes for this question?')) return;
       commit(leftPid, list.slice().map((a) => ({ op: 'remove', ann: a })));
       announce('Annotations cleared. Use Undo to restore them.');
     }
   });
   // In highlighter mode, finishing a selection in the left pane highlights it.
   document.addEventListener('mouseup', (e) => {
-    if (ui.annMode !== 'hl' || !leftPid || !e.target.closest || !e.target.closest('#problem-article')) return;
+    if (ui.annMode !== 'hl' || !leftPid || !e.target.closest || !e.target.closest('#problem-article') || e.target.closest('.note-layer')) return;
     setTimeout(highlightSelection, 0); // let the selection (DOM or CodeMirror) settle first
   });
 
