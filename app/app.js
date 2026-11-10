@@ -41,9 +41,10 @@
   const EXAM_DEFAULT_MINUTES = 120;
   const EXAM_MAX_MINUTES = 300;
   const DEFAULT_EXAM_PREFS = { kind: 'full', examId: Object.keys(EXAMS)[0], topics: [], picked: [], timerOn: true, minutes: EXAM_DEFAULT_MINUTES };
-  const STORE_VERSION = 5; // v1: prefs/session/notes/annotations; v2: + exam, attempts, examPrefs; v3: + reviews, frozen grades;
+  const STORE_VERSION = 6; // v1: prefs/session/notes/annotations; v2: + exam, attempts, examPrefs; v3: + reviews, frozen grades;
                            // v4: practice notes/annotations move onto the practice session (no longer shared across sessions)
                            // v5: bold around code renders as bold, so text highlights in that prose are moved to match
+                           // v6: + history (a lasting log of graded answers); practice sets get an id and a `logged` map
 
   const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
   function load() {
@@ -93,6 +94,8 @@
       }
     }
     ['answers', 'checked', 'revealed', 'selfGrade', 'marked', 'eliminated'].forEach((k) => { if (!isObj(s[k])) s[k] = {}; });
+    // History entries name the set they came from (see recordAnswer). Sets saved before v6 have no id, so they get one now.
+    if (typeof s.id !== 'string') s.id = `p-${typeof s.startedAt === 'number' ? s.startedAt : Date.now()}`;
     if (!Number.isInteger(s.index) || s.index < 0 || s.index >= s.groups.length) s.index = 0;
     const t = s.timer;
     if (t && !(isObj(t) && typeof t.durationMs === 'number' && typeof t.remainingMs === 'number' && (t.runningSince === null || typeof t.runningSince === 'number'))) s.timer = null;
@@ -126,6 +129,17 @@
     return a;
   }
 
+  // Answer history (v6): one entry per graded answer, oldest first: { id, ok, at, via, set }.
+  //   id: the part; ok: right or wrong; at: when (ms); via: 'check' | 'self' | 'exam'; set: the practice set or exam attempt id.
+  // It is a log rather than per-part totals because spacing needs the order and the days answers were given.
+  // Totals per part and per topic are worked out from it (partStats, topicStats), so they can't drift from it.
+  // Damaged entries and parts no longer in the bank are dropped. Saves from before v6 start with an empty history.
+  const HISTORY_VIA = ['check', 'self', 'exam'];
+  function cleanHistory(h) {
+    return (Array.isArray(h) ? h : []).filter((e) => isObj(e) && QMAP[e.id] && typeof e.ok === 'boolean' &&
+      typeof e.at === 'number' && HISTORY_VIA.includes(e.via) && typeof e.set === 'string');
+  }
+
   const saved = load();
   const store = {
     version: STORE_VERSION, // same storage key as v1, so practice sessions saved before exams existed still load
@@ -137,6 +151,7 @@
     exam: migrateAttempt(saved && saved.exam),         // the exam in progress (never submitted), or null
     attempts: (Array.isArray(saved && saved.attempts) ? saved.attempts : []).map(migrateAttempt).filter(Boolean), // submitted exams, oldest first
     reviews: (saved && saved.reviews && typeof saved.reviews === 'object') ? saved.reviews : {}, // attemptId -> review workspace
+    history: cleanHistory(saved && saved.history), // every graded answer, oldest first (see recordAnswer); empty before v6
   };
   // Scratch code and annotations belong to the session they were made in. Before v4, practice kept them in
   // store-wide maps keyed by problem, so they leaked into every later set with the same question. A saved
@@ -149,6 +164,9 @@
     store.session.annotations = Object.fromEntries(Object.entries(oldAnns).filter(([pid]) => own.has(pid) && Array.isArray(oldAnns[pid])));
   }
   if (store.session) store.session.annotations = store.session.annotations || {};
+  // v6: which parts this set has already put in the history. Only the practice set needs it (exams are recorded once,
+  // at submission), so it isn't added in migrateSession, which also runs on submitted attempts that must never change.
+  if (store.session && !isObj(store.session.logged)) store.session.logged = {};
   // Drop review workspaces whose attempt is gone or whose record is damaged (they are rebuilt from the attempt on open).
   Object.keys(store.reviews).forEach((id) => {
     const w = store.reviews[id];
@@ -351,6 +369,59 @@
     return r;
   }
   const statusIn = (a, id) => (a.graded && a.graded[id]) || examStatus(a, id);
+
+  // ── Answer history (store.history; format next to cleanHistory) ──
+  // Only real evidence is recorded: a part's first verdict in a practice set, made before its solution was shown
+  // (callers check that), or its frozen exam grade. Fixing a wrong answer and checking again in the same set doesn't
+  // erase the miss. A self-grade can be changed (a misclick), so it updates its own entry instead of adding one.
+  // s.logged[id] remembers how the part was recorded in this set ('check' or 'self').
+  function recordAnswer(s, id, ok, via) {
+    if (!s.logged) s.logged = {};
+    if (via === 'self' && s.logged[id] === 'self') {
+      for (let i = store.history.length - 1; i >= 0; i--) {
+        const e = store.history[i];
+        if (e.set === s.id && e.id === id && e.via === 'self') { e.ok = ok; return; }
+      }
+    }
+    if (s.logged[id]) return;
+    store.history.push({ id, ok, at: Date.now(), via, set: s.id });
+    s.logged[id] = via;
+  }
+  // At submission: every auto-graded part answered right or wrong. Unanswered and staff-graded parts are not
+  // evidence of a misunderstanding (the same rule as insightsFor), so they are left out.
+  function recordExam(a) {
+    a.ids.forEach((id) => {
+      const st = a.graded[id];
+      if (autoGradable(QMAP[id]) && (st === 'correct' || st === 'incorrect')) {
+        store.history.push({ id, ok: st === 'correct', at: a.finishedAt, via: 'exam', set: a.id });
+      }
+    });
+  }
+  // A part's record: how many times graded, how many right, and the latest result (null if never graded).
+  function partStats(id) {
+    const r = { n: 0, correct: 0, last: null, lastAt: null };
+    store.history.forEach((e) => {
+      if (e.id !== id) return;
+      r.n++; if (e.ok) r.correct++;
+      r.last = e.ok; r.lastAt = e.at;
+    });
+    return r;
+  }
+  // The same per topic, for every topic with at least one graded answer. A part counts toward its own topic tags;
+  // a part without tags counts toward its group's (as in insightsFor).
+  function topicsOfPart(id) {
+    const q = QMAP[id];
+    return q.topics && q.topics.length ? q.topics : groupTopics(q.problem);
+  }
+  function topicStats() {
+    const out = {};
+    store.history.forEach((e) => topicsOfPart(e.id).forEach((t) => {
+      const r = out[t] || (out[t] = { n: 0, correct: 0, last: null, lastAt: null });
+      r.n++; if (e.ok) r.correct++;
+      r.last = e.ok; r.lastAt = e.at;
+    }));
+    return out;
+  }
   const fmtPts = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
   // ───────────────────────────── Scratch code editor (left pane) ─────────────────────────────
@@ -2333,7 +2404,8 @@
   function newSession(ids, title) {
     const p = store.prefs;
     const timer = p.timerOn ? { durationMs: p.minutes * 60000, remainingMs: p.minutes * 60000, runningSince: Date.now(), expired: false } : null;
-    store.session = { ids, groups: groupIds(ids), index: 0, title, answers: {}, checked: {}, revealed: {}, selfGrade: {}, marked: {}, eliminated: {}, notes: {}, annotations: {}, timer, startedAt: Date.now(), finishedAt: null, finished: false };
+    const now = Date.now();
+    store.session = { id: `p-${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, ids, groups: groupIds(ids), index: 0, title, answers: {}, checked: {}, revealed: {}, selfGrade: {}, marked: {}, eliminated: {}, logged: {}, notes: {}, annotations: {}, timer, startedAt: now, finishedAt: null, finished: false };
     setView('practice');
     ui.screen = 'practice';
     ui.navOpen = false;
@@ -2484,6 +2556,7 @@
     stopActive(s, end);
     Object.assign(s, { submitted: true, finished: true, finishedAt: end, autoSubmitted: !!auto, leftAt: null });
     Object.assign(s, gradeAttempt(s)); // frozen grades + score for results and history
+    recordExam(s);
     store.attempts.push(s);
     store.exam = null;
     setView('review', s.id);
@@ -3837,13 +3910,19 @@
         const ans = s.answers[q.id];
         if (isMC(q)) s.checked[q.id] = gradeMC(q, ans) ? 'correct' : 'incorrect';
         else s.checked[q.id] = matchesOfficial(q, ans) ? 'correct' : 'unmatched';
+        // 'unmatched' isn't a verdict yet (the self-grade will be), and after Show Solution a right answer proves nothing.
+        if (hasAnswer(s, q.id) && !s.revealed[q.id] && s.checked[q.id] !== 'unmatched') recordAnswer(s, q.id, s.checked[q.id] === 'correct', 'check');
         announce(`Part ${q.label}: ${{ correct: 'Correct.', incorrect: 'Incorrect.', unmatched: 'Not an exact match. Show the solution to grade yourself.' }[s.checked[q.id]]}`);
         break;
       }
       case 'reveal': if (isExam(s)) return; ui.confirmReveal = q.id; render(); { const y = document.getElementById(`reveal-yes-${q.id}`); if (y) y.focus(); } return;
       case 'reveal-no': ui.confirmReveal = null; break;
       case 'reveal-yes': if (isExam(s)) return; s.revealed[q.id] = true; ui.confirmReveal = null; announce('Solution shown.'); break;
-      case 'self': if (isExam(s)) return; s.selfGrade[q.id] = btn.dataset.v; break;
+      case 'self':
+        if (isExam(s)) return;
+        s.selfGrade[q.id] = btn.dataset.v;
+        if (hasAnswer(s, q.id)) recordAnswer(s, q.id, btn.dataset.v === 'correct', 'self');
+        break;
       case 'eliminate': {
         if (locked(s)) return;
         const i = Number(btn.dataset.i);

@@ -86,7 +86,7 @@ const legacyText = (s) => s.split(/\n\n/).map((p) => p.split(/(`[^`]*`)/).map((x
   await page.goto(APP_URL); await click('[data-action="enter"]'); await click('.resume [data-action="resume"]'); await page.waitForSelector('mark.hl');
   m = await marks();
   const S = await st();
-  ok(S.version === 5 && m.h1 === 'Hint' && m.h2 === 'Implement', 'saved as v5; reloading does not move them again');
+  ok(S.version >= 5 && m.h1 === 'Hint' && m.h2 === 'Implement', 'saved as v5 or later; reloading does not move them again');
 
   // ── B-2: Spring 2025 Q2 header ──
   await practice(['sp25-2', 'sp25-2c']);

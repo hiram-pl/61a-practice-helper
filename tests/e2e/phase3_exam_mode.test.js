@@ -48,7 +48,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(await text('.progress') === 'Q 1 / 2' && await has('[data-action="check"]') && await has('#c-fa25-1a-2:checked'), 'v1 session resumes in practice (answers kept, Check Answer shown)');
   await click('[data-action="home"], [data-action="go-home"]');
   let S = await st();
-  ok(S.version === 5 && Array.isArray(S.attempts) && S.exam === null, 'store upgraded (version 5: attempts, exam, reviews, per-session notes)');
+  ok(S.version === 6 && Array.isArray(S.attempts) && S.exam === null && Array.isArray(S.history), 'store upgraded (version 6: attempts, exam, reviews, per-session notes, history)');
 
   // ─── Exam setup: full past exam ───
   await click('#mode-exam');
