@@ -2475,6 +2475,57 @@
     }
     return out;
   }
+
+  // ── Review my mistakes: a set built from the answer history ──
+  // Most of the set (REVIEW_WEAK_SHARE) is what you're still getting wrong: first the questions whose latest answer
+  // on some part was wrong, then other questions from the topics you've missed most (weakest first), skipping ones
+  // you got right in the last day. The rest is questions you got fully right a while ago (at least REVIEW_GAP_MS,
+  // oldest first), so old material keeps coming back before it's forgotten. If one bucket runs short, the other fills
+  // in. Only questions that match the setup filters (topics, exams, difficulty, this semester's scope) are used, and
+  // only their in-scope parts count.
+  const REVIEW_WEAK_SHARE = 0.7;
+  const REVIEW_GAP_MS = 24 * 60 * 60 * 1000;
+  function reviewBuckets(pids, now = Date.now()) {
+    const topics = topicStats();
+    // A topic's weakness: its share of wrong answers, with one extra right answer assumed so a single miss counts less
+    // than a long record of misses. Topics never missed are 0 (not weak), so a topic you haven't tried isn't pulled in.
+    const weak = (t) => { const r = topics[t]; return r && r.n > r.correct ? (r.n - r.correct) / (r.n + 1) : 0; };
+    const missed = [], weakTopic = [], rightOld = [];
+    pids.forEach((pid) => {
+      const st = partsOf(pid).map((q) => partStats(q.id)).filter((r) => r.n);
+      const lastAt = st.length ? Math.max(...st.map((r) => r.lastAt)) : null;
+      const wrongNow = st.filter((r) => r.last === false).length;
+      const w = Math.max(0, ...groupTopics(pid).map(weak));
+      if (wrongNow) missed.push({ pid, key: wrongNow, at: lastAt });
+      else if (st.length && now - lastAt < REVIEW_GAP_MS) return; // got it right just now: not due yet
+      else if (w > 0) weakTopic.push({ pid, key: w });
+      else if (st.length) rightOld.push({ pid, at: lastAt });
+    });
+    const shuffled = (list) => list.map((x) => ({ x, r: Math.random() })).sort((a, b) => a.r - b.r).map((o) => o.x);
+    // Ties are broken at random so the same set doesn't come back every time.
+    return {
+      weak: [...shuffled(missed).sort((a, b) => b.key - a.key), ...shuffled(weakTopic).sort((a, b) => b.key - a.key)].map((g) => g.pid),
+      old: rightOld.sort((a, b) => a.at - b.at).map((g) => g.pid),
+    };
+  }
+  function reviewPids(pids, n) {
+    const b = reviewBuckets(pids);
+    let nOld = Math.min(b.old.length, Math.round(n * (1 - REVIEW_WEAK_SHARE)));
+    const nWeak = Math.min(b.weak.length, n - nOld);
+    nOld = Math.min(b.old.length, n - nWeak); // not enough weak questions: more old ones instead
+    return [...b.weak.slice(0, nWeak), ...b.old.slice(0, nOld)];
+  }
+  // Questions matching the filters that the review would draw on first (missed or in a missed topic).
+  const reviewCount = () => reviewBuckets(problemsOf(filtered(store.prefs))).weak.length;
+  function startReview() {
+    const p = store.prefs;
+    if (ui.sizeDraft != null) commitSize(ui.sizeDraft);
+    const chosen = reviewPids(problemsOf(filtered(p)), setSize());
+    if (!chosen.length) return;
+    const order = p.mix ? interleave(chosen) : chosen.slice().sort((a, b) => ORDER[partsOf(a)[0].id] - ORDER[partsOf(b)[0].id]);
+    const ids = order.flatMap((pid) => partsOf(pid).filter((q) => p.exams.includes(PROBLEMS[q.problem].exam)).map((q) => q.id));
+    newSession(ids, 'Review my mistakes');
+  }
   function finishSession() {
     const s = store.session;
     pauseTimer(s.timer);
@@ -2679,6 +2730,8 @@
     if (summary) summary.innerHTML = practiceSummaryHTML();
     const start = document.querySelector('[data-action="start"]');
     if (start) start.disabled = !(size && practiceMinutesOk());
+    const review = document.querySelector('[data-action="start-review"]');
+    if (review) review.disabled = !(size && practiceMinutesOk() && reviewCount());
     const [up, down] = document.querySelectorAll('.dd-step-btn');
     if (up) up.disabled = !(max && size < max);
     if (down) down.disabled = !(max && size > 1);
@@ -2695,6 +2748,7 @@
     if (pids.length && p.size > pids.length) p.size = pids.length; // fewer groups match now: the set shrinks to fit
     const n = setSize();
     const minutesOk = practiceMinutesOk();
+    const review = reviewCount();
 
     const resume = s && !s.finished ? `
       <div class="resume" role="region" aria-label="Unfinished practice">
@@ -2744,8 +2798,12 @@
         <div class="start-row">
           <div class="summary">${practiceSummaryHTML()}</div>
           <label class="mix-toggle" title="Questions alternate between topics instead of coming in exam order"><input type="checkbox" id="mix-topics" ${p.mix ? 'checked' : ''}> Mix topics</label>
+          <button class="btn btn-lg" data-action="start-review" ${review && n && minutesOk ? '' : 'disabled'} aria-describedby="review-hint">Review my mistakes</button>
           <button class="btn btn-primary btn-lg" data-action="start" ${n && minutesOk ? '' : 'disabled'}>Start practice →</button>
         </div>
+        <p class="hint review-hint" id="review-hint">${review
+          ? `Review my mistakes: mostly questions and topics you’ve gotten wrong (${review} matching), plus some you got right a while ago. Uses the set size and filters above.`
+          : (store.history.length ? 'Review my mistakes: no wrong answers match these filters.' : 'Review my mistakes: available once you’ve checked an answer and gotten it wrong.')}</p>
       </section>`}
 
       <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a><span class="feedback-note">Your feedback can make this platform better!</span></div>
@@ -3835,6 +3893,11 @@
         ui.menu = null;
         if (store.session && !store.session.finished && !confirm('Starting a new set replaces your unfinished one. Continue?')) return;
         startFromPrefs(); return;
+      case 'start-review':
+        ui.menu = null;
+        if (!reviewCount()) return;
+        if (store.session && !store.session.finished && !confirm('Starting a new set replaces your unfinished one. Continue?')) return;
+        startReview(); return;
       case 'resume': {
         setView('practice'); ui.screen = 'practice'; ui.menu = null;
         const t = store.session && store.session.timer; // restart a timer that Exit paused
