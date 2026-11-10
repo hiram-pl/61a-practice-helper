@@ -190,7 +190,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ── Practice afterwards: only what hasn't been shown ──
   await page.goto(APP_URL);
-  await page.evaluate((k) => { const v = JSON.parse(localStorage.getItem(k)); v.prefs.mode = 'practice'; v.prefs.types = ['code']; localStorage.setItem(k, JSON.stringify(v)); }, KEY);
+  await page.evaluate((k) => { const v = JSON.parse(localStorage.getItem(k)); v.prefs.mode = 'practice'; v.prefs.types = ['code']; v.prefs.mix = false; /* exam order: the first question has Run Code */ localStorage.setItem(k, JSON.stringify(v)); }, KEY);
   await page.reload();
   await click(page, '[data-action="enter"]');
   await click(page, '#mode-practice');

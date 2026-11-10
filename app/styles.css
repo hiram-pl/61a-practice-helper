@@ -101,6 +101,7 @@ p code, li code, .rich code { background: var(--code-bg); padding: 0 3px; border
 .start-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .start-row .summary { color: var(--muted); font-size: 14px; }
 .start-row .summary b { color: var(--ink); }
+.start-row .mix-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); cursor: pointer; }
 .btn-lg { padding: 10px 22px; font-size: 15px; }
 .disclaimer { font-size: 12px; color: var(--muted); margin-top: 18px; }
 
