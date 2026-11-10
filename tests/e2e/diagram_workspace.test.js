@@ -1,7 +1,7 @@
 // Environment diagram workspace and the Python Tutor link: drawing, text, arrows, undo/redo, saving, and the
 // path from an exam into its review. Also checks that ordinary re-renders leave the workspace alone.
 const puppeteer = require('puppeteer-core');
-const { APP_URL, CHROME, skipTour } = require('./config');
+const { APP_URL, CHROME, skipTour, fullBank } = require('./config');
 const KEY = 'cs61a-practice:v1';
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`); if (!c) fails++; };
@@ -11,6 +11,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
   const page = await browser.newPage();
   await skipTour(page);
+  await fullBank(page); // uses questions this semester's scope may hide; in_scope.test.js covers the scope
   await page.setViewport({ width: 1400, height: 900 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

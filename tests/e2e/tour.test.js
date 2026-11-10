@@ -17,6 +17,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.setViewport({ width, height });
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('dialog', (d) => d.accept());
+    // A fixed scope, so the tips follow the same questions whatever this semester's in_scope.js hides: Fall 2025 Q1
+    // stays (part (c) hidden) and Q3 has a scope note.
+    await page.evaluateOnNewDocument(() => {
+      const scope = { outOfScopeTopics: ['efficiency'], questions: { 'fa25-1c': { status: 'out', reason: 'Orders of growth', source: 'ed' } },
+        problems: { 'fa25-3': { status: 'note', source: 'ed', note: 'The definition below says “repr string”; the question is still in scope.' } } };
+      Object.defineProperty(window, 'CS61A_SCOPE', { configurable: true, get: () => scope, set: () => {} });
+    });
     await page.goto(APP_URL);
     return page;
   };

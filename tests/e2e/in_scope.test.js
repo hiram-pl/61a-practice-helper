@@ -1,5 +1,5 @@
-// This semester's scope (app/data/in_scope.js): out-of-scope parts never appear in Practice or Exam mode, the
-// out-of-scope topic is not listed, exam totals count only what is shown, scope notes appear next to their question, and
+// This semester's scope (app/data/in_scope.js, set up for Data C88C Midterm 2): out-of-scope parts never appear in
+// Practice or Exam mode, the out-of-scope topics (orders of growth, generators, iterators) are not listed, exam totals count only what is shown, scope notes appear next to their question, and
 // saved data that mentions hidden parts (old attempts, old filters, old picks) still loads.
 const puppeteer = require('puppeteer-core');
 const path = require('path');
@@ -20,9 +20,10 @@ const HIDDEN = new Set(B.QUESTIONS.filter(hidden).map((q) => q.id));
 const examIds = (e) => B.QUESTIONS.filter((q) => B.PROBLEMS[q.problem].exam === e && !HIDDEN.has(q.id)).map((q) => q.id);
 const ALL_EXAMS = Object.keys(B.EXAMS);
 
-ok(HIDDEN.size === 24, `24 parts are out of scope (${HIDDEN.size})`);
+ok(HIDDEN.size === 76, `76 parts are out of scope (${HIDDEN.size})`);
 ok(['sp24-1a', 'sp24-1b', 'sp24-1d', 'sp24-4aplus', 'sp23-4e', 'fa22-4b-c', 'sp23-2f', 'fa25-1c'].every((id) => HIDDEN.has(id)), 'mutation, repr and orders-of-growth parts are hidden');
-ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((id) => !HIDDEN.has(id)), 'parts that only carry a note stay in scope');
+ok(['fa25-1a', 'sp25-3a', 'sp25-3g', 'fa23-1a', 'fa22-3b-b', 'fa22-7a', 'fa25-6k', 'fa24-4i', 'sp25-1b'].every((id) => HIDDEN.has(id)), 'generator and iterator parts are hidden, including untagged parts of generator problems');
+ok(['fa25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a', 'fa25-6m', 'fa24-4l', 'fa25-4b', 'fa24-6a', 'sp25-1a'].every((id) => !HIDDEN.has(id)), 'parts that only carry a note stay in scope');
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
@@ -49,7 +50,7 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
   await click('[data-action="enter"]');
   await click('[data-action="menu"][data-id="topics"]');
   const topicRows = await page.$$eval('input[name="topics"]', (l) => l.map((i) => i.value));
-  ok(!topicRows.includes('efficiency') && topicRows.includes('trees') && !/scope/i.test(await text('.dd-panel')), `Topics menu: Efficiency is not listed (${topicRows.length} topics shown)`);
+  ok(!['efficiency', 'generators', 'iterators'].some((t) => topicRows.includes(t)) && topicRows.includes('trees') && !/scope/i.test(await text('.dd-panel')), `Topics menu: Efficiency, Generators and Iterators are not listed (${topicRows.length} topics shown)`);
   await click('[data-action="menu"][data-id="topics"]');
   await click('[data-action="start"]'); await page.waitForSelector('#pane-right .part');
   let S = await st();
@@ -63,7 +64,7 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
 
   // ── Full past exams: counts and points only include what is shown ──
   const exam = (e) => ({ prefs: { ...prefs, mode: 'exam' }, examPrefs: { kind: 'full', examId: e, topics: [], picked: [], timerOn: false, minutes: 120 } });
-  for (const [e, pts] of [['sp23', 31], ['sp24', 45], ['fa22', 37], ['fa25', 49]]) {
+  for (const [e, pts] of [['sp23', 25], ['sp25', 35], ['fa22', 29], ['fa25', 44]]) {
     await seed(exam(e));
     await click('[data-action="enter"]');
     const row = await page.$eval(`#exam-id-${e}`, (i) => i.closest('label').textContent.replace(/\s+/g, ' ').trim());
@@ -72,11 +73,12 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
     S = await st();
     ok(JSON.stringify(S.exam.ids) === JSON.stringify(examIds(e)), `${e}: the exam has the ${S.exam.ids.length} in-scope parts in exam order`);
     if (e === 'sp23') ok(!S.exam.groups.some((g) => g.pid.startsWith('sp23-2')) && !S.exam.groups.some((g) => g.pid === 'sp23-3a-iii'), `sp23: Q2 and 3(a)iii are gone entirely (${S.exam.groups.length} groups left)`);
-    if (e === 'sp24') {
-      ok(S.exam.groups[0].pid === 'sp24-1' && JSON.stringify(S.exam.groups[0].ids) === '["sp24-1c"]', 'sp24: Q1 keeps only part (c)');
-      ok(/\(2\.0 points\)/.test(await text('#problem-article h2')), `sp24 Q1 header shows the in-scope points: “${await text('#problem-article h2')}”`);
+    if (e === 'sp25') {
+      ok(S.exam.groups[0].pid === 'sp25-1' && JSON.stringify(S.exam.groups[0].ids) === '["sp25-1a"]', 'sp25: Q1 keeps only part (a)');
+      ok(/\(2\.0 points\)/.test(await text('#problem-article h2')), `sp25 Q1 header shows the in-scope points: “${await text('#problem-article h2')}”`);
       const note = await text('#problem-article .src .scope-note');
-      ok(/shake/.test(note) && /cruel/.test(note) && !(await page.$('#part-sp24-1c .scope-note')), `sp24 Q1: the note about the code is on the left: “${note}”`);
+      ok(/iter/.test(note) && /next/.test(note) && !(await page.$('#part-sp25-1a .scope-note')), `sp25 Q1: the note about the removed parts is on the left: “${note}”`);
+      ok(!S.exam.groups.some((g) => g.pid.startsWith('sp25-3')), 'sp25: Berkeley Time (a generator) is gone entirely');
     }
   }
 
@@ -86,9 +88,9 @@ ok(['sp24-1c', 'fa25-3a', 'sp25-3a', 'fa23-3a', 'fa22-1c', 'fa21-5b-a'].every((i
   S = await st();
   ok(JSON.stringify(S.examPrefs.picked) === '["fa25-3","fa23-3"]', `a saved pick of an out-of-scope question is dropped (${JSON.stringify(S.examPrefs.picked)})`);
   const chips = await page.$$eval('.chips [id^="xt-"]', (l) => l.map((c) => c.id));
-  ok(chips.length > 0 && !chips.includes('xt-efficiency'), `exam topic filter: Efficiency is not listed (${chips.length} topic chips)`);
+  ok(chips.length > 0 && !['xt-efficiency', 'xt-generators', 'xt-iterators'].some((c) => chips.includes(c)), `exam topic filter: Efficiency, Generators and Iterators are not listed (${chips.length} topic chips)`);
   const listed = await page.$$eval('#pick-list [data-pick]', (l) => l.map((i) => i.dataset.pick));
-  ok(!listed.some((pid) => ['sp23-2a', 'sp23-2b', 'fa22-4b', 'sp23-3a-iii'].includes(pid)) && listed.includes('sp24-1'), `picker lists ${listed.length} questions, none wholly out of scope`);
+  ok(!listed.some((pid) => ['sp23-2a', 'sp23-2b', 'fa22-4b', 'sp23-3a-iii', 'sp24-1', 'fa22-7', 'sp25-3a'].includes(pid)) && listed.includes('sp25-1'), `picker lists ${listed.length} questions, none wholly out of scope`);
   await click('[data-action="start-exam"]'); await page.waitForSelector('#pane-right .part');
   const n1 = await text('#problem-article .src .scope-note');
   ok(/repr string/.test(n1), `fa25 Q3 has its problem note: “${n1.slice(0, 70)}…”`);
