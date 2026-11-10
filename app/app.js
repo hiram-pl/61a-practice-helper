@@ -424,6 +424,25 @@
     }));
     return out;
   }
+  // Topic mastery, from the history in time order: 'new' (never graded), 'solid' (the last SOLID_STREAK answers on it
+  // were all right, given on at least SOLID_DAYS different days) or 'shaky' (anything else). A miss resets the run, so
+  // a solid topic drops back to shaky. Needing different days means one good sitting can't make a topic solid: it has
+  // to still be right after a break, which is what spacing is meant to check.
+  const SOLID_STREAK = 3;
+  const SOLID_DAYS = 2;
+  function topicMastery() {
+    const run = {}; // topic -> { streak, days: Set of local dates in the current run }
+    store.history.slice().sort((a, b) => a.at - b.at).forEach((e) => topicsOfPart(e.id).forEach((t) => {
+      const r = run[t] || (run[t] = { streak: 0, days: new Set() });
+      if (e.ok) { r.streak++; r.days.add(new Date(e.at).toDateString()); } else { r.streak = 0; r.days.clear(); }
+    }));
+    const out = {};
+    TOPICS.forEach((t) => {
+      const r = run[t.id];
+      out[t.id] = !r ? 'new' : r.streak >= SOLID_STREAK && r.days.size >= SOLID_DAYS ? 'solid' : 'shaky';
+    });
+    return out;
+  }
   const fmtPts = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
   // ───────────────────────────── Scratch code editor (left pane) ─────────────────────────────
@@ -2437,13 +2456,23 @@
     if (ui.sizeDraft != null) commitSize(ui.sizeDraft);
     const pids = problemsOf(filtered(p));
     const n = setSize();
-    const chosen = pids.slice().sort(() => Math.random() - 0.5).slice(0, n);
+    const chosen = weightedPick(pids, n);
     // Mix topics: groups in an interleaved order. Off: bank order, as before. Either way a group's parts stay together
     // and in exam order (groupIds keeps first-appearance order, and each group's parts are listed in bank order).
     const order = p.mix ? interleave(chosen) : chosen.slice().sort((a, b) => ORDER[partsOf(a)[0].id] - ORDER[partsOf(b)[0].id]);
     const ids = order.flatMap((pid) => QUESTIONS.filter((q) => q.problem === pid && p.exams.includes(PROBLEMS[q.problem].exam))
       .sort((a, b) => ORDER[a.id] - ORDER[b.id]).map((q) => q.id));
     newSession(ids, topicNames(p.topics));
+  }
+  // Spacing: a question in a shaky topic is SHAKY_WEIGHT times as likely to be picked as any other, so topics you have
+  // started but not mastered keep coming back in later sets, mixed in with the rest, until they are solid. Weighted
+  // sampling without replacement (each question gets the key random^(1/weight); the n largest keys win).
+  const SHAKY_WEIGHT = 3;
+  function weightedPick(pids, n) {
+    const m = topicMastery();
+    const weight = (pid) => (groupTopics(pid).some((t) => m[t] === 'shaky') ? SHAKY_WEIGHT : 1);
+    return pids.map((pid) => ({ pid, key: Math.pow(Math.random(), 1 / weight(pid)) }))
+      .sort((a, b) => b.key - a.key).slice(0, n).map((x) => x.pid);
   }
   // A group's main topic: the tag most of its parts carry (ties go to the one listed first). Used to interleave.
   function mainTopic(pid) {
@@ -2685,9 +2714,9 @@
       ${open ? `<div class="dd-panel" role="group" aria-label="${esc(label)}">${body}</div>` : ''}
     </div>`;
   }
-  function optRow(type, pref, value, label, on, extra, disabled) {
+  function optRow(type, pref, value, label, on, extra, disabled, badge) {
     return `<label class="dd-opt${disabled ? ' disabled' : ''}"><input type="${type}" name="${pref}" data-pref="${pref}" value="${esc(value)}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
-      <span class="dd-txt">${esc(label)}</span>${extra ? `<span class="dd-extra">${extra}</span>` : ''}</label>`;
+      <span class="dd-txt">${esc(label)}${badge || ''}</span>${extra ? `<span class="dd-extra">${extra}</span>` : ''}</label>`;
   }
   function summarize(selected, all, nameOf, allLabel) {
     if (!selected.length) return 'None';
@@ -2696,6 +2725,8 @@
     return `${selected.length} selected`;
   }
 
+  // Mastery shown beside each topic in the Topics menu (nothing for a topic not tried yet).
+  const masteryBadge = (m) => (m === 'solid' || m === 'shaky' ? ` <span class="mastery ${m}" title="${m === 'solid' ? 'Solid' : 'Shaky: comes up more often'}">${m}</span>` : '');
   const practiceMinutesOk = () => { const p = store.prefs; return !p.timerOn || (Number.isInteger(p.minutes) && p.minutes >= 1 && p.minutes <= 60); };
   function practiceSummaryHTML() {
     const p = store.prefs;
@@ -2760,12 +2791,14 @@
         <div class="actions"><button class="btn" data-action="show-results">View results</button></div></div>` : '');
 
     const topicName = (id) => TOPICS.find((t) => t.id === id).name;
+    const mastery = topicMastery();
     const topicsBody = `<div class="dd-tools"><button class="link" data-action="topics-all">Select all</button><button class="link" data-action="topics-none">Clear</button></div>
       <div class="dd-list cols">${TOPICS.filter((t) => !OUT_TOPICS.has(t.id)).map((t) => {
         const count = problemsOf(base.filter((q) => q.topics.includes(t.id))).length;
-        return optRow('checkbox', 'topics', t.id, t.name, p.topics.includes(t.id), count ? String(count) : 'soon', !count);
+        return optRow('checkbox', 'topics', t.id, t.name, p.topics.includes(t.id), count ? String(count) : 'soon', !count, masteryBadge(mastery[t.id]));
       }).join('')}</div>
-      <p class="hint">Numbers are questions (each may have several parts). Leave everything unchecked to include all topics.</p>`;
+      <p class="hint">Numbers are questions (each may have several parts). Leave everything unchecked to include all topics.</p>
+      <p class="hint mastery-key"><span class="mastery solid">solid</span> right ${SOLID_STREAK} times in a row, on ${SOLID_DAYS}+ days · <span class="mastery shaky">shaky</span> tried, not solid yet; comes up more often in new sets.</p>`;
     const examsBody = `<div class="dd-list">${Object.values(EXAMS).map((e) => optRow('checkbox', 'exams', e.id, e.label, p.exams.includes(e.id))).join('')}</div>`;
     const diffBody = `<div class="dd-list">${DIFFS.map((d) => optRow('checkbox', 'difficulties', d, d[0].toUpperCase() + d.slice(1), p.difficulties.includes(d))).join('')}</div>`;
     const timerBody = `<div class="timer-config">
