@@ -36,7 +36,7 @@
   const live = document.getElementById('sr-live');
 
   // ───────────────────────────── State & persistence ─────────────────────────────
-  const DEFAULT_PREFS = { mode: 'practice', topics: [], exams: Object.keys(EXAMS), difficulties: DIFFS.slice(), size: 5, timerOn: true, minutes: 25 };
+  const DEFAULT_PREFS = { mode: 'practice', topics: [], exams: Object.keys(EXAMS), difficulties: DIFFS.slice(), size: 5, timerOn: true, minutes: 25, mix: true };
   // Neither exam PDF states a time limit, so exams start from this editable default (labeled as such in the UI).
   const EXAM_DEFAULT_MINUTES = 120;
   const EXAM_MAX_MINUTES = 300;
@@ -188,6 +188,8 @@
   // 'all' from the former dropdown, which now starts again from the default. The former Question Types filter is gone,
   // so a saved selection of types is dropped and never narrows a new set.
   if (!(Number.isInteger(store.prefs.size) && store.prefs.size >= 1)) store.prefs.size = DEFAULT_PREFS.size;
+  // Mix topics (interleaving) is on unless the student turned it off; saves from before it existed get it on.
+  if (typeof store.prefs.mix !== 'boolean') store.prefs.mix = DEFAULT_PREFS.mix;
   delete store.prefs.types;
   if (!['practice', 'exam'].includes(store.prefs.mode)) store.prefs.mode = 'practice';
   if (!['full', 'custom'].includes(store.examPrefs.kind)) store.examPrefs.kind = 'full';
@@ -2363,10 +2365,43 @@
     if (ui.sizeDraft != null) commitSize(ui.sizeDraft);
     const pids = problemsOf(filtered(p));
     const n = setSize();
-    const chosen = new Set(pids.slice().sort(() => Math.random() - 0.5).slice(0, n));
-    const ids = QUESTIONS.filter((q) => chosen.has(q.problem) && p.exams.includes(PROBLEMS[q.problem].exam))
-      .sort((a, b) => ORDER[a.id] - ORDER[b.id]).map((q) => q.id);
+    const chosen = pids.slice().sort(() => Math.random() - 0.5).slice(0, n);
+    // Mix topics: groups in an interleaved order. Off: bank order, as before. Either way a group's parts stay together
+    // and in exam order (groupIds keeps first-appearance order, and each group's parts are listed in bank order).
+    const order = p.mix ? interleave(chosen) : chosen.slice().sort((a, b) => ORDER[partsOf(a)[0].id] - ORDER[partsOf(b)[0].id]);
+    const ids = order.flatMap((pid) => QUESTIONS.filter((q) => q.problem === pid && p.exams.includes(PROBLEMS[q.problem].exam))
+      .sort((a, b) => ORDER[a.id] - ORDER[b.id]).map((q) => q.id));
     newSession(ids, topicNames(p.topics));
+  }
+  // A group's main topic: the tag most of its parts carry (ties go to the one listed first). Used to interleave.
+  function mainTopic(pid) {
+    const count = {};
+    partsOf(pid).forEach((q) => q.topics.forEach((t) => { count[t] = (count[t] || 0) + 1; }));
+    return groupTopics(pid).reduce((best, t) => (best === null || count[t] > count[best] ? t : best), null);
+  }
+  // Interleaving: mixing topics within a set makes you work out which idea each question needs, instead of reusing
+  // the last one, which helps that choice stick. Groups come in an order where two in a row never share a main topic
+  // unless nothing else is left. Each step takes a group from the topic with the most groups still waiting (other
+  // than the last one's), so a big topic is spread out rather than piling up at the end. Within a topic, the order
+  // is random.
+  function interleave(pids, rand = Math.random) {
+    const byTopic = {};
+    pids.forEach((pid) => { const t = mainTopic(pid) || ''; (byTopic[t] = byTopic[t] || []).push(pid); });
+    Object.values(byTopic).forEach((list) => {
+      for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    });
+    const out = [];
+    let last = null;
+    while (out.length < pids.length) {
+      const waiting = Object.keys(byTopic).filter((t) => byTopic[t].length);
+      const others = waiting.filter((t) => t !== last);
+      const pool = others.length ? others : waiting;
+      const most = Math.max(...pool.map((t) => byTopic[t].length));
+      const tied = pool.filter((t) => byTopic[t].length === most);
+      last = tied[Math.floor(rand() * tied.length)];
+      out.push(byTopic[last].pop());
+    }
+    return out;
   }
   function finishSession() {
     const s = store.session;
@@ -2635,6 +2670,7 @@
         </div>
         <div class="start-row">
           <div class="summary">${practiceSummaryHTML()}</div>
+          <label class="mix-toggle" title="Questions alternate between topics instead of coming in exam order"><input type="checkbox" id="mix-topics" ${p.mix ? 'checked' : ''}> Mix topics</label>
           <button class="btn btn-primary btn-lg" data-action="start" ${n && minutesOk ? '' : 'disabled'}>Start practice →</button>
         </div>
       </section>`}
@@ -3927,6 +3963,7 @@
   app.addEventListener('change', (e) => {
     const el = e.target;
     if (el.id === 'timer-on') { store.prefs.timerOn = el.checked; save(); render(); return; }
+    if (el.id === 'mix-topics') { store.prefs.mix = el.checked; save(); render(); return; }
     if (el.id === 'set-size') { commitSize(el.value); save(); render(); return; }
     if (el.id === 'timer-min') {
       const v = Number(el.value);

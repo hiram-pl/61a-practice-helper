@@ -114,7 +114,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(/practice purposes only and do not predict your actual exam scores/.test(await text('.exam-results')), 'exam results disclaimer present');
 
   // ── §1 / §9 practice isolation (eliminations + answers + code) ──
-  await seed({ prefs: { mode: 'practice', timerOn: false, size: 999, exams: ['fa25'], difficulties: ['easy', 'medium', 'hard'], topics: [] } });
+  // mix: false keeps exam order, so the first question has choices to eliminate
+  await seed({ prefs: { mode: 'practice', timerOn: false, size: 999, exams: ['fa25'], difficulties: ['easy', 'medium', 'hard'], topics: [], mix: false } });
   await click('[data-action="enter"]'); await click('[data-action="start"]');
   await page.waitForSelector('.elim-btn');
   const firstPart = await page.$eval('#pane-right .part', (p) => p.dataset.part);
