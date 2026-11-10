@@ -58,7 +58,8 @@ const inScope = (q) => !listedOut(q) && !topicOut(q);
 before = failures;
 QUESTIONS.filter((q) => topicOut(q) && !listedOut(q)).forEach((q) => fail(`'${q.id}' is hidden by an out-of-scope topic (${q.topics.join(', ')}) but isn't listed in questions; add it with a reason`));
 // ...and a question that touches an out-of-scope topic but stays visible is worth a second look.
-QUESTIONS.filter((q) => inScope(q) && q.topics.some((t) => outTopics.has(t))).forEach((q) => fail(`'${q.id}' is tagged ${q.topics.filter((t) => outTopics.has(t)).join(', ')} (out of scope) but is still shown; mark it 'out' or add a note`));
+const noted = (q) => (questions[q.id] && questions[q.id].status === 'note') || (problems[q.problem] && problems[q.problem].status === 'note');
+QUESTIONS.filter((q) => inScope(q) && q.topics.some((t) => outTopics.has(t)) && !noted(q)).forEach((q) => fail(`'${q.id}' is tagged ${q.topics.filter((t) => outTopics.has(t)).join(', ')} (out of scope) but is still shown; mark it 'out' or add a note`));
 if (failures === before) pass('every question with an out-of-scope topic is listed');
 
 // 4. A note on something that is hidden would never be seen.

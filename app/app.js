@@ -2791,7 +2791,8 @@
         return opt('exam-id', 'examId', e.id, p.examId === e.id, esc(e.label), `${gs.length} questions · ${parts} parts · ${fmtPts(pts)} points · original order`, badge);
       }).join('')}</div>`;
     } else {
-      const avail = TOPICS.filter((t) => Object.keys(PROBLEMS).some((pid) => groupTopics(pid).includes(t.id)));
+      // Same as the Practice topic menu: an out-of-scope topic isn't offered, even when a part still shown carries its tag.
+      const avail = TOPICS.filter((t) => !OUT_TOPICS.has(t.id) && Object.keys(PROBLEMS).some((pid) => groupTopics(pid).includes(t.id)));
       config = `<div class="chips" role="group" aria-label="Filter by topic">${avail.map((t) =>
         `<button class="chip" id="xt-${t.id}" data-action="xtopic" data-id="${t.id}" aria-pressed="${p.topics.includes(t.id)}">${esc(t.name)}</button>`).join('')}        ${p.topics.length ? '<button class="link" data-action="xtopics-clear">Clear filters</button>' : ''}</div>
         <input type="search" id="exam-search" class="pick-search" placeholder="Search by name, exam, or question number" value="${esc(ui.examQuery)}" aria-label="Search questions" autocomplete="off">
