@@ -93,7 +93,7 @@
         s.marked = marked;
       }
     }
-    ['answers', 'checked', 'revealed', 'selfGrade', 'marked', 'eliminated'].forEach((k) => { if (!isObj(s[k])) s[k] = {}; });
+    ['answers', 'checked', 'revealed', 'selfGrade', 'marked', 'eliminated', 'firstTry'].forEach((k) => { if (!isObj(s[k])) s[k] = {}; });
     // History entries name the set they came from (see recordAnswer). Sets saved before v6 have no id, so they get one now.
     if (typeof s.id !== 'string') s.id = `p-${typeof s.startedAt === 'number' ? s.startedAt : Date.now()}`;
     if (!Number.isInteger(s.index) || s.index < 0 || s.index >= s.groups.length) s.index = 0;
@@ -323,11 +323,14 @@
     if (list.length) s.eliminated[qid] = list.sort((x, y) => x - y);
     else delete s.eliminated[qid];
   }
+  // s.firstTry[qid]: whether the first pick on a one-answer question in a practice set was right (set on click).
+  const wrongFirst = (s, id) => !!(s.firstTry && s.firstTry[id] === false);
   // Final status used by the navigator & results: correct | incorrect | ungraded | skipped
   function statusOf(s, id) {
     const q = QMAP[id];
     if (!hasAnswer(s, id)) return 'skipped';
     const a = s.answers[id];
+    if (wrongFirst(s, id)) return 'incorrect'; // practice: a wrong first pick stays a miss, even once fixed
     if (isMC(q)) return gradeMC(q, a) ? 'correct' : 'incorrect';
     if (q.type === 'short_answer' && matchesOfficial(q, a)) return 'correct';
     if (s.selfGrade[id]) return s.selfGrade[id];
@@ -3374,8 +3377,9 @@
     const parts = [];
     const checked = s.checked[id];
     if (checked && !s.revealed[id]) {
-      if (checked === 'correct') parts.push(`<div class="feedback good" role="status"><div class="title">Correct!</div>${isMC(q) ? 'Nice work.' : 'Your answer matches the official answer.'}</div>`);
-      else if (checked === 'incorrect') parts.push('<div class="feedback bad" role="status"><div class="title">Not quite.</div>Change your answer and check again, or show the solution.</div>');
+      if (checked === 'correct' && !wrongFirst(s, id)) parts.push(`<div class="feedback good" role="status"><div class="title">Correct!</div>${isMC(q) ? 'Nice work.' : 'Your answer matches the official answer.'}</div>`);
+      else if (checked === 'incorrect') parts.push(`<div class="feedback bad" role="status"><div class="title">Not quite.</div>${q.type === 'single_choice' ? 'This counts as a miss. Pick another answer to find the right one, or show the solution.' : 'Change your answer and check again, or show the solution.'}</div>`);
+      else if (checked === 'correct' && wrongFirst(s, id)) { parts.push('<div class="feedback good" role="status"><div class="title">Correct now.</div>Your first pick was wrong, so this still counts as a miss.</div>'); }
       else parts.push('<div class="feedback info" role="status"><div class="title">Not an exact match</div>Your answer doesn’t match the official answer word for word. Equivalent code can still be correct, so show the solution and grade it yourself.</div>');
     }
     if (s.revealed[id]) {
@@ -3385,7 +3389,7 @@
           <button class="btn btn-sm ${sg === 'correct' ? 'chosen' : ''}" data-action="self" data-v="correct" aria-pressed="${sg === 'correct'}">I got it right</button>
           <button class="btn btn-sm ${sg === 'incorrect' ? 'chosen' : ''}" data-action="self" data-v="incorrect" aria-pressed="${sg === 'incorrect'}">I got it wrong</button></div>` : '';
       const verdict = hasAnswer(s, id) && (isMC(q) || (q.type === 'short_answer' && matchesOfficial(q, s.answers[id])))
-        ? (statusOf(s, id) === 'correct' ? ' good' : ' bad') : ' info';
+        ? ((isMC(q) ? gradeMC(q, s.answers[id]) : true) ? ' good' : ' bad') : ' info';
       parts.push(`<div class="feedback${verdict}">${officialAnswerHTML(q)}${self}</div>`);
     }
     return parts.join('');
@@ -3666,7 +3670,7 @@
       const label = { correct: 'Correct', incorrect: 'Incorrect', ungraded: 'Not graded', skipped: 'Unanswered' }[st];
       return `<button class="result-row" data-action="review" data-i="${gi}" data-q="${id}">
         <span class="n">${gi + 1}${g.ids.length > 1 ? `<small>${esc(q.label)}</small>` : ''}</span>
-        <span class="t">${esc(EXAMS[pr.exam].label)} Q${esc(pr.number)} ${esc(q.label)}: ${esc(pr.title)}<small>${TYPE_LABEL[q.type]}${s.marked[g.pid] ? ' · marked for review' : ''}${s.revealed[id] ? ' · solution viewed' : ''}</small></span>
+        <span class="t">${esc(EXAMS[pr.exam].label)} Q${esc(pr.number)} ${esc(q.label)}: ${esc(pr.title)}<small>${TYPE_LABEL[q.type]}${s.marked[g.pid] ? ' · marked for review' : ''}${s.revealed[id] ? ' · solution viewed' : ''}${wrongFirst(s, id) && gradeMC(q, s.answers[id]) ? ' · wrong on the first pick, fixed after' : ''}</small></span>
         <span class="badge ${st}">${label}</span></button>`;
     }).join('')).join('');
     const answered = s.ids.length - counts.skipped;
@@ -4238,6 +4242,18 @@
     }
     if (el.checked) setEliminated(s, qid, i, false); // choosing an eliminated option un-eliminates it
     delete s.checked[qid];
+    // Practice, one-answer questions: a click is graded right away, and the first pick is what counts. A later pick
+    // is graded too (so you can see you fixed it), but the history and results keep the first verdict.
+    if (q.type === 'single_choice' && !isExam(s)) {
+      const right = gradeMC(q, i);
+      s.checked[qid] = right ? 'correct' : 'incorrect';
+      if (!s.revealed[qid]) {
+        if (!s.firstTry) s.firstTry = {};
+        if (!(qid in s.firstTry)) s.firstTry[qid] = right;
+        recordAnswer(s, qid, right, 'check');
+      }
+      announce(`Part ${q.label}: ${right ? 'Correct.' : 'Incorrect.'}`);
+    }
     save();
     render(); // also refreshes the linked code blank
   });
