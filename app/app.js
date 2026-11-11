@@ -2456,7 +2456,7 @@
     if (ui.sizeDraft != null) commitSize(ui.sizeDraft);
     const pids = problemsOf(filtered(p));
     const n = setSize();
-    const chosen = weightedPick(pids, n);
+    const chosen = freshFirstPick(pids, n);
     // Mix topics: groups in an interleaved order. Off: bank order, as before. Either way a group's parts stay together
     // and in exam order (groupIds keeps first-appearance order, and each group's parts are listed in bank order).
     const order = p.mix ? interleave(chosen) : chosen.slice().sort((a, b) => ORDER[partsOf(a)[0].id] - ORDER[partsOf(b)[0].id]);
@@ -2474,6 +2474,21 @@
     return pids.map((pid) => ({ pid, key: Math.pow(Math.random(), 1 / weight(pid)) }))
       .sort((a, b) => b.key - a.key).slice(0, n).map((x) => x.pid);
   }
+  // No repeats: Start only picks questions you haven't answered yet (no part of them in the history). Only when those
+  // run out does it fill the rest with done questions, the ones answered longest ago first. Review my mistakes is
+  // separate and still brings back done questions on purpose.
+  function lastDone() {
+    const out = {}; // pid -> when any of its parts was last graded
+    store.history.forEach((e) => { const pid = QMAP[e.id].problem; out[pid] = Math.max(out[pid] || 0, e.at); });
+    return out;
+  }
+  function freshFirstPick(pids, n) {
+    const done = lastDone();
+    const fresh = weightedPick(pids.filter((pid) => !(pid in done)), n);
+    const old = pids.filter((pid) => pid in done).sort((a, b) => done[a] - done[b]);
+    return [...fresh, ...old.slice(0, n - fresh.length)];
+  }
+  const freshCount = (pids) => { const done = lastDone(); return pids.filter((pid) => !(pid in done)).length; };
   // A group's main topic: the tag most of its parts carry (ties go to the one listed first). Used to interleave.
   function mainTopic(pid) {
     const count = {};
@@ -2731,7 +2746,9 @@
   function practiceSummaryHTML() {
     const p = store.prefs;
     const max = sizeMax();
-    return `<b>${max}</b> matching question${max === 1 ? '' : 's'} · this set has <b>${setSize()}</b>${p.topics.length > 2 ? ` · ${esc(topicNames(p.topics))}` : ''}`;
+    const fresh = freshCount(problemsOf(filtered(p)));
+    const repeats = Math.max(0, setSize() - fresh);
+    return `<b>${max}</b> matching question${max === 1 ? '' : 's'} (<b class="fresh-count">${fresh}</b> not done yet) · this set has <b>${setSize()}</b>${repeats ? ` <span class="repeat-note">(${repeats} you’ve done before, oldest first)</span>` : ''}${p.topics.length > 2 ? ` · ${esc(topicNames(p.topics))}` : ''}`;
   }
   // Set size: a number box styled like the dropdowns, typed into directly or stepped with the arrows on its right.
   // What is typed stays as typed (ui.sizeDraft) until it is a valid size; it is normalized on blur and before starting.
@@ -2768,6 +2785,46 @@
     if (down) down.disabled = !(max && size > 1);
     const unit = document.getElementById('set-size-unit');
     if (unit) unit.textContent = Number(ui.sizeDraft) === 1 ? 'question' : 'questions';
+  }
+
+  // Your topics (home, both modes): every topic you have answered, strongest to weakest, as a bar of right vs. missed
+  // answers from the history. Ranked by accuracy with one right and one wrong answer assumed, so 1 of 1 doesn't
+  // outrank 9 of 10 and one miss doesn't sink a topic below a long record of misses.
+  function renderTopicOverview() {
+    const stats = topicStats();
+    const mastery = topicMastery();
+    const score = (r) => (r.correct + 1) / (r.n + 2);
+    const rows = TOPICS.filter((t) => stats[t.id] && !OUT_TOPICS.has(t.id))
+      .map((t) => ({ t, r: stats[t.id] }))
+      .sort((a, b) => score(b.r) - score(a.r) || b.r.n - a.r.n);
+    if (!rows.length) {
+      return `<section class="topic-overview" aria-label="Your topics"><h2>Your topics</h2>
+        <p class="hint">Check some answers and this shows which topics you’re strongest and weakest in.</p></section>`;
+    }
+    const pct = (r) => Math.round((100 * r.correct) / r.n);
+    const best = rows[0], worst = rows[rows.length - 1];
+    const callouts = rows.length > 1 ? `<div class="to-callouts">
+        <div class="to-callout good"><span>Strongest</span><b>${esc(best.t.name)}</b><small>${pct(best.r)}% right</small></div>
+        <div class="to-callout bad"><span>Needs the most work</span><b>${esc(worst.t.name)}</b><small>${worst.r.n - worst.r.correct} missed of ${worst.r.n}</small></div>
+      </div>` : '';
+    const bars = rows.map(({ t, r }) => {
+      const miss = r.n - r.correct;
+      const w = (100 * r.correct) / r.n;
+      return `<li class="to-row" data-topic="${t.id}">
+        <span class="to-name">${esc(t.name)}${masteryBadge(mastery[t.id])}</span>
+        <span class="to-bar" role="img" aria-label="${esc(t.name)}: ${r.correct} right, ${miss} missed">
+          <span class="to-right" style="width:${w}%"></span><span class="to-miss" style="width:${100 - w}%"></span>
+        </span>
+        <span class="to-num"><b>${pct(r)}%</b> · ${r.correct}/${r.n}${miss ? ` · <span class="to-missed">${miss} missed</span>` : ''}</span>
+      </li>`;
+    }).join('');
+    return `<section class="topic-overview" aria-label="Your topics">
+      <h2>Your topics</h2>
+      <p class="hint">From every answer you’ve checked, in practice and exams. Strongest at the top.
+        <span class="to-key"><i class="to-right"></i>right <i class="to-miss"></i>missed</span></p>
+      ${callouts}
+      <ol class="to-list">${bars}</ol>
+    </section>`;
   }
 
   function renderHome() {
@@ -2838,6 +2895,8 @@
           ? `Review my mistakes: mostly questions and topics you’ve gotten wrong (${review} matching), plus some you got right a while ago. Uses the set size and filters above.`
           : (store.history.length ? 'Review my mistakes: no wrong answers match these filters.' : 'Review my mistakes: available once you’ve checked an answer and gotten it wrong.')}</p>
       </section>`}
+
+      ${renderTopicOverview()}
 
       <div class="feedback-row"><a class="btn btn-sm btn-home btn-feedback" href="${FEEDBACK_URL}" target="_blank" rel="noopener noreferrer">${icon('msg')}Give Feedback</a><span class="feedback-note">Your feedback can make this platform better!</span></div>
       <div class="notice">No account needed. Your answers, code notes and annotations are saved in <b>this browser on this device</b> and are gone if you clear site data.</div>
