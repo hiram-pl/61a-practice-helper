@@ -354,8 +354,17 @@
   // to the question bank or answer key never silently change an old attempt's result.
   function gradeAttempt(a) {
     const graded = {};
-    a.ids.forEach((id) => { graded[id] = examStatus(a, id); });
+    a.ids.forEach((id) => { graded[id] = (a.overrides && a.overrides[id]) || examStatus(a, id); });
     return { graded, score: scoreFrom(a.ids, graded) };
+  }
+  // A grade you change by hand on the results screen (the automatic check only accepts exact matches, so an
+  // equivalent answer can be marked wrong). Stored in a.overrides[id], rescored, and the answer history follows.
+  function overrideGrade(a, id, st) {
+    if (!a.overrides) a.overrides = {};
+    if (examStatus(a, id) === st) delete a.overrides[id]; else a.overrides[id] = st;
+    a.graded[id] = st;
+    a.score = scoreFrom(a.ids, a.graded);
+    store.history.forEach((e) => { if (e.set === a.id && e.id === id && e.via === 'exam') e.ok = st === 'correct'; });
   }
   // "Automatically graded" score: only auto-gradable parts with a published point value count, in both
   // numerator and denominator. Staff-graded parts and parts without point values are excluded (and reported).
@@ -3802,7 +3811,8 @@
         <span class="pr-lbl">${esc(q.label)}</span>
         <span class="pr-topics">${q.topics.map((t) => esc(topicLabel(t))).join(', ')}</span>
         <span class="pr-pts">${pts}</span>
-        <span class="badge ${badgeCls(st)}">${STATUS_LABEL[st]}</span>
+        <span class="badge ${badgeCls(st)}">${STATUS_LABEL[st]}${a.overrides && a.overrides[id] ? ' (changed)' : ''}</span>
+        ${st === 'correct' || st === 'incorrect' ? `<button class="btn btn-sm" data-action="override-grade" data-q="${id}" data-v="${st === 'correct' ? 'incorrect' : 'correct'}" aria-label="Mark part ${esc(q.label)} ${st === 'correct' ? 'incorrect' : 'correct'}">Mark ${st === 'correct' ? 'wrong' : 'right'}</button>` : '<span></span>'}
         <button class="btn btn-sm" data-action="exam-review" data-i="${gi}" data-q="${id}" aria-label="Review question ${gi + 1} part ${esc(q.label)}">Review</button>
       </li>`;
     }).join('');
@@ -4072,6 +4082,15 @@
         const pr = PROBLEMS[pid];
         p.mode = 'practice';
         newSession(partsOf(pid).map((q) => q.id), `Practice: ${pr.title} (${shortExam(pr.exam)} Q${pr.number})`);
+        return;
+      }
+      case 'override-grade': { // results: change one part's grade by hand
+        const at = attemptById(ui.attemptId);
+        const id = btn.dataset.q;
+        if (!at || !at.ids.includes(id)) return;
+        overrideGrade(at, id, btn.dataset.v);
+        announce(`Part ${QMAP[id].label} marked ${btn.dataset.v}.`);
+        save(); render();
         return;
       }
       case 'retake': {
